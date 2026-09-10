@@ -1,9 +1,7 @@
 # ESP_FAST_LCD
 
 Fast LCD rendering infrastructure specialized for ESP32-S3 using transmission-order framebuffer, ring buffers, dirty tiles, 
-and asynchronous DMA transmission on top of the mature abstraction of [esp_lcd](https://github.com/espressif/esp-idf/tree/v6.1/components/esp_lcd). 
-
----
+and asynchronous DMA transmission on top of the mature abstraction of [esp_lcd](https://github.com/espressif/esp-idf/tree/v6.1/components/esp_lcd).
 
 ## Advantage
 
@@ -20,8 +18,6 @@ to run independently of the main logic thread.
 - Multiple bitmap preparation functions and corresponding draw functions for further accelerating bitmap draws.
 - Accelerated text rendering engine using the masked rectangle fill providing 2-level cached fast text and outlined text rendering.
 - Built-in modified version of Unifont 17.0.05.
-
----
 
 ## Usage
 
@@ -106,8 +102,6 @@ void example() {
     esp_fast_lcd_commit(fast_lcd_panel_device);
 }
 ```
-
----
 
 ## License
 - Source code is licensed under MIT License.
