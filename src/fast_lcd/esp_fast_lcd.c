@@ -25,13 +25,16 @@ esp_err_t esp_fast_lcd_new_lcd_panel_device(
 	#endif // CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
 
 	// Reserve handles for the LCD panel device.
-	esp_fast_lcd_panel_device_t*			panel_device				= NULL;
-	esp_fast_lcd_panel_transfer_queue_t*	panel_transfer_queue		= NULL;
-	esp_fast_lcd_panel_properties_t*		panel_properties			= NULL;
-	uint16_t*								transfer_queue_framebuffer	= NULL;
-	uint16_t*								transfer_queue_ring_buffer	= NULL;
-	uint32_t*								transfer_queue_dirty_tiles	= NULL;
-	SemaphoreHandle_t						transfer_queue_free_buffer	= NULL;
+	esp_fast_lcd_panel_device_t*			panel_device						= NULL;
+	esp_fast_lcd_panel_transfer_queue_t*	panel_transfer_queue				= NULL;
+	esp_fast_lcd_panel_properties_t*		panel_properties					= NULL;
+	esp_fast_lcd_panel_transmit_t*			transfer_queue_pending_transmits	= NULL;
+	atomic_uint*							transfer_queue_ring_transmits		= NULL;
+	uint16_t*								transfer_queue_ring_buffer			= NULL;
+	uint16_t*								transfer_queue_framebuffer			= NULL;
+	uint32_t*								transfer_queue_dirty_tiles			= NULL;
+	SemaphoreHandle_t						transfer_queue_free_buffer_count	= NULL;
+	SemaphoreHandle_t						transfer_queue_ring_buffer_lock		= NULL;
 
 	// Get the properties from the configuration of the panel device.
 	const uint32_t	frame_size_x			= panel_device_configuration.frame_size_x;
@@ -76,7 +79,8 @@ esp_err_t esp_fast_lcd_new_lcd_panel_device(
 	#endif // CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
 
 	// Create the counting semaphore of the available ring buffer slots.
-	transfer_queue_free_buffer = xSemaphoreCreateCounting(ring_buffer_slot_count, ring_buffer_slot_count);
+	transfer_queue_free_buffer_count	= xSemaphoreCreateCounting	(ring_buffer_slot_count, ring_buffer_slot_count);
+	transfer_queue_ring_buffer_lock		= xSemaphoreCreateBinary	();
 
 	// Allocate the handles of the panel device.
 	panel_device			= calloc(1, sizeof(esp_fast_lcd_panel_device_t));
@@ -84,18 +88,31 @@ esp_err_t esp_fast_lcd_new_lcd_panel_device(
 	panel_transfer_queue	= calloc(1, sizeof(esp_fast_lcd_panel_transfer_queue_t));
 
 	// Create the handles of the transfer queue.
-	transfer_queue_framebuffer = heap_caps_calloc	(frame_size,							sizeof(uint16_t), DMA_CAPS | buffer_flags);
-	transfer_queue_ring_buffer = heap_caps_calloc	(frame_size * ring_buffer_slot_count,	sizeof(uint16_t), DMA_CAPS | buffer_flags);
-	transfer_queue_dirty_tiles = calloc				(frame_tile_count_y,					sizeof(uint32_t));
+	transfer_queue_pending_transmits	= calloc			(frame_tile_count,						sizeof(esp_fast_lcd_panel_transmit_t));
+	transfer_queue_ring_transmits		= calloc			(ring_buffer_slot_count,				sizeof(atomic_uint));
+	transfer_queue_dirty_tiles			= calloc			(frame_tile_count_y,					sizeof(uint32_t));
+	transfer_queue_ring_buffer			= heap_caps_calloc	(frame_size * ring_buffer_slot_count,	sizeof(uint16_t), DMA_CAPS | buffer_flags);
+	transfer_queue_framebuffer			= heap_caps_calloc	(frame_size,							sizeof(uint16_t), DMA_CAPS | buffer_flags);
 
 	// Check the allocations.
-	ESP_GOTO_ON_FALSE(transfer_queue_free_buffer	!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create free buffer counter of the ring buffer for LCD panel device \"%s\".",	name);
-	ESP_GOTO_ON_FALSE(panel_device					!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create panel device struct for LCD panel device \"%s\".",						name);
-	ESP_GOTO_ON_FALSE(panel_properties				!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create properties for LCD panel device \"%s\".",								name);
-	ESP_GOTO_ON_FALSE(panel_transfer_queue			!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create transfer queue for LCD panel device \"%s\".",							name);
-	ESP_GOTO_ON_FALSE(transfer_queue_framebuffer	!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create framebuffer for LCD panel device \"%s\".",								name);
-	ESP_GOTO_ON_FALSE(transfer_queue_ring_buffer	!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create ring buffer for LCD panel device \"%s\".",								name);
-	ESP_GOTO_ON_FALSE(transfer_queue_dirty_tiles	!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create dirty tiles bitmap for LCD panel device \"%s\".",						name);
+	ESP_GOTO_ON_FALSE(transfer_queue_free_buffer_count	!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create free buffer counter of the ring buffer for LCD panel device \"%s\".",	name);
+	ESP_GOTO_ON_FALSE(transfer_queue_ring_buffer_lock	!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create lock of the ring buffer for LCD panel device \"%s\".",					name);
+	ESP_GOTO_ON_FALSE(panel_device						!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create panel device struct for LCD panel device \"%s\".",						name);
+	ESP_GOTO_ON_FALSE(panel_properties					!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create properties for LCD panel device \"%s\".",								name);
+	ESP_GOTO_ON_FALSE(panel_transfer_queue				!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create transfer queue for LCD panel device \"%s\".",							name);
+	ESP_GOTO_ON_FALSE(transfer_queue_pending_transmits	!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create pending transmission array for LCD panel device \"%s\".",				name);
+	ESP_GOTO_ON_FALSE(transfer_queue_ring_transmits		!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create in-flight transmission array for LCD panel device \"%s\".",				name);
+	ESP_GOTO_ON_FALSE(transfer_queue_dirty_tiles		!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create dirty tiles bitmap for LCD panel device \"%s\".",						name);
+	ESP_GOTO_ON_FALSE(transfer_queue_ring_buffer		!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create ring buffer for LCD panel device \"%s\".",								name);
+	ESP_GOTO_ON_FALSE(transfer_queue_framebuffer		!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create framebuffer for LCD panel device \"%s\".",								name);
+
+	// Log the progress if LCD panel debug logging is enabled.
+	#ifdef CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
+		ESP_LOGD(ESP_FAST_LCD_TAG, "Initializing locks for LCD panel device handle \"%s.\"", name);
+	#endif // CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
+
+	// Give the lock back by default.
+	xSemaphoreGive(transfer_queue_ring_buffer_lock);
 
 	// Log the progress if LCD panel debug logging is enabled.
 	#ifdef CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
@@ -120,12 +137,17 @@ esp_err_t esp_fast_lcd_new_lcd_panel_device(
 	#endif // CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
 
 	// Fill the transfer queue of the LCD panel device handle with the allocated handles.
-	panel_transfer_queue->free_buffer	= transfer_queue_free_buffer;
-	panel_transfer_queue->ring_buffer	= transfer_queue_ring_buffer;
-	panel_transfer_queue->framebuffer	= transfer_queue_framebuffer;
-	panel_transfer_queue->dirty_tiles	= transfer_queue_dirty_tiles;
-	panel_transfer_queue->ring_index	= 0;
-	panel_transfer_queue->frame_dirty	= false;
+	panel_transfer_queue->free_buffer_count			= transfer_queue_free_buffer_count;
+	panel_transfer_queue->ring_buffer_lock			= transfer_queue_ring_buffer_lock;
+	panel_transfer_queue->pending_transmits			= transfer_queue_pending_transmits;
+	panel_transfer_queue->ring_transmits			= transfer_queue_ring_transmits;
+	panel_transfer_queue->ring_buffer				= transfer_queue_ring_buffer;
+	panel_transfer_queue->framebuffer				= transfer_queue_framebuffer;
+	panel_transfer_queue->dirty_tiles				= transfer_queue_dirty_tiles;
+	panel_transfer_queue->pending_transmit_count	= 0U;
+	panel_transfer_queue->transmit_index			= 0U;
+	panel_transfer_queue->ring_index				= 0U;
+	panel_transfer_queue->frame_dirty				= false;
 
 	// Fill the properties of the LCD panel device handle with the calculated properties.
 	panel_properties->configuration			= panel_device_configuration;
@@ -158,13 +180,16 @@ esp_err_t esp_fast_lcd_new_lcd_panel_device(
 		ESP_LOGD(ESP_FAST_LCD_TAG, "Cleaning up resources.");
 	#endif // CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
 
-	if (transfer_queue_free_buffer)	vSemaphoreDelete	(transfer_queue_free_buffer);	// Cleanup the free buffer semaphore.
-	if (transfer_queue_dirty_tiles)	free				(transfer_queue_dirty_tiles);	// Cleanup the dirty tile bitmap.
-	if (transfer_queue_ring_buffer)	free				(transfer_queue_ring_buffer);	// Cleanup the ring buffer.
-	if (transfer_queue_framebuffer)	free				(transfer_queue_framebuffer);	// Cleanup the framebuffer.
-	if (panel_transfer_queue)		free				(panel_transfer_queue);			// Cleanup the transfer queue.
-	if (panel_properties)			free				(panel_properties);				// Cleanup the properties.
-	if (panel_device)				free				(panel_device);					// Cleanup the panel device struct.
+	if (transfer_queue_free_buffer_count)	vSemaphoreDelete(transfer_queue_free_buffer_count);	// Cleanup the free buffer count counting semaphore.
+	if (transfer_queue_ring_buffer_lock)	vSemaphoreDelete(transfer_queue_ring_buffer_lock);	// Cleanup the ring buffer lock binary semaphore.
+	if (transfer_queue_framebuffer)			free			(transfer_queue_framebuffer);		// Cleanup the framebuffer.
+	if (transfer_queue_ring_buffer)			free			(transfer_queue_ring_buffer);		// Cleanup the ring buffer.
+	if (transfer_queue_dirty_tiles)			free			(transfer_queue_dirty_tiles);		// Cleanup the dirty tile bitmap.
+	if (transfer_queue_ring_transmits)		free			(transfer_queue_ring_transmits);	// Cleanup the in-flight transmission array.
+	if (transfer_queue_pending_transmits)	free			(transfer_queue_pending_transmits);	// Cleanup the pending transmission array.
+	if (panel_transfer_queue)				free			(panel_transfer_queue);				// Cleanup the transfer queue.
+	if (panel_properties)					free			(panel_properties);					// Cleanup the properties.
+	if (panel_device)						free			(panel_device);						// Cleanup the panel device struct.
 
 	return ret;
 }
@@ -184,10 +209,13 @@ esp_err_t esp_fast_lcd_del_lcd_panel_device(esp_fast_lcd_panel_device_t* panel_d
 	// Free all transfer queue related allocations.
 	esp_fast_lcd_panel_transfer_queue_t* transfer_queue = panel_device_in->transfer_queue;
 
-	// Free the counting semaphore and the queue of the ring buffer of the transfer queue.
-	vSemaphoreDelete(transfer_queue->free_buffer);
+	// Free the semaphores of the queue.
+	vSemaphoreDelete(transfer_queue->free_buffer_count);
+	vSemaphoreDelete(transfer_queue->ring_buffer_lock);
 
 	// Free all transfer queue related allocations and the queue itself.
+	free(transfer_queue->pending_transmits);
+	free(transfer_queue->ring_transmits);
 	free(transfer_queue->ring_buffer);
 	free(transfer_queue->framebuffer);
 	free(transfer_queue->dirty_tiles);

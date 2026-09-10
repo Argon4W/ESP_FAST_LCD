@@ -3,6 +3,7 @@
 
 #include "stdint.h"
 #include "stddef.h"
+#include "stdatomic.h"
 #include "freertos/FreeRTOS.h"
 #include "esp_lcd_panel_dev.h"
 #include "esp_fast_lcd_simd.h"
@@ -41,15 +42,31 @@ typedef struct {
 } esp_fast_lcd_panel_properties_t;
 
 /**
+ * @brief The info struct of a transmission.
+ */
+typedef struct {
+	uint32_t position_x;	/*!< The top-left origin position X of the region at the panel to be transmitted in pixels. */
+	uint32_t position_y;	/*!< The top-left origin position Y of the region at the panel to be transmitted in pixels. */
+	uint32_t size_x;		/*!< The width of the region to be transmitted in pixels. */
+	uint32_t size_y;		/*!< The height of the region to be transmitted in pixels. */
+	uint32_t buffer_offset;	/*!< The offset of the region in the ring buffer slot in bytes. */
+} esp_fast_lcd_panel_transmit_t;
+
+/**
  * @brief The struct of the asynchronous transfer queue of a LCD panel device.
  */
 typedef struct {
-	SemaphoreHandle_t	free_buffer;	/*!< The counting semaphore of remaining free ring buffer slots. */
-	uint16_t*			ring_buffer;	/*!< The SPI DMA transfer ring buffer, in frames. The count of slots of the ring buffer is ringBufferSlots. */
-	uint16_t*			framebuffer;	/*!< The off-screen framebuffer to be drawn. */
-	uint32_t*			dirty_tiles;	/*!< The 2D bitsets of dirty tiles to be committed. */
-	uint64_t			ring_index;		/*!< The incrementing ring index of which ring buffer slot to be used. */
-	uint8_t				frame_dirty;	/*!< True if the frame has changes that are not been committed. */
+	SemaphoreHandle_t				free_buffer_count;		/*!< The counting semaphore of remaining free ring buffer slots. */
+	SemaphoreHandle_t				ring_buffer_lock;		/*!< The binary semaphore lock of the ring buffer. */
+	esp_fast_lcd_panel_transmit_t*	pending_transmits;		/*!< The pending ESP_LCD transmits in the ring buffer slot to be sent by the next esp_fast_lcd_transmit() call. */
+	atomic_uint*					ring_transmits;			/*!< The array of the count of in-flight transmits of each ring buffer slots. */
+	uint16_t*						ring_buffer;			/*!< The SPI DMA transfer ring buffer, in frames. The count of slots of the ring buffer is ringBufferSlots. */
+	uint16_t*						framebuffer;			/*!< The off-screen framebuffer to be drawn. */
+	uint32_t*						dirty_tiles;			/*!< The 2D bitsets of dirty tiles to be committed. */
+	uint32_t						pending_transmit_count;	/*!< The count of pending ESP_LCD transmits in the ring buffer slot to be sent. */
+	uint64_t						transmit_index;			/*!< The incrementing ring index of which ring buffer slot is currently transmitting. */
+	uint64_t						ring_index;				/*!< The incrementing ring index of which ring buffer slot to be used. */
+	uint8_t							frame_dirty;			/*!< True if the frame has changes that are not been committed. */
 } esp_fast_lcd_panel_transfer_queue_t;
 
 /**
@@ -390,11 +407,20 @@ esp_err_t esp_fast_lcd_draw_native_bitmap_masked(
 );
 
 /**
- * @brief			Commit all uncommitted changes on the framebuffer to the ESP_LCD panel IO devices of the given LCD panel device.
+ * @brief			Commit all uncommitted changes on the framebuffer to the ring buffer slot and wait for transmission.
+ * @attention		Only one draw-commit task is allowed, Multiple commits before transmit will result in overwriting the
+ *					same ring buffer slot.
  * @param context	The device to be committed.
  * @return			The status of the commit.
  */
-esp_err_t esp_fast_lcd_commit(const esp_fast_lcd_panel_device_t* context);// Commit all changes to the actual LCD panel.
+esp_err_t esp_fast_lcd_commit(const esp_fast_lcd_panel_device_t* context);
+
+/**
+ * @brief			Transfer the pending transmission in the ring buffer slot to the ESP_LCD panel IO devices of the given LCD panel device.
+ * @param context	The device to be transferred.
+ * @return			The status of the transmission, if error occurred, it is NON-RECOVERABLE, recreate the panel device if needed.
+ */
+esp_err_t esp_fast_lcd_transmit(const esp_fast_lcd_panel_device_t* context);
 
 /**
  * @brief								Prepare the given RGBA8888 color format bitmap. The R, G, and B color components

@@ -1,7 +1,7 @@
 # ESP_FAST_LCD
 
 Fast LCD rendering infrastructure specialized for ESP32-S3 using transmission-order framebuffer, ring buffers, dirty tiles, 
-and asynchronous DMA transmission on top of the mature abstraction of [esp_lcd](https://github.com/espressif/esp-idf/tree/v6.1/components/esp_lcd).
+and asynchronous mailbox-style DMA transmission on top of the mature abstraction of [esp_lcd](https://github.com/espressif/esp-idf/tree/v6.1/components/esp_lcd).
 
 ## Advantage
 
@@ -98,8 +98,30 @@ void example() {
         "World"
     );
     
-    // Commit changes to the esp_lcd.
+    // Commit changes to the ring buffer slot (mailbox).
+    // Commit should be at the end of the same task of draws.
     esp_fast_lcd_commit(fast_lcd_panel_device);
+}
+
+// Asynchronous transmission task at a fixed-rate.
+void transmit_task(void* pvParameters) {
+    while (true) {
+        // Get the start time in microseconds.
+        const int64_t start_time = esp_timer_get_time();
+
+        // Transfer the pending transmissions in ring buffer slot to the LCD panel.
+        esp_fast_lcd_transmit((esp_fast_lcd_panel_device_t*) pvParameters);
+
+        // Calculate the time to delay for next frame.
+        const int64_t end_time = esp_timer_get_time();
+        const int64_t interval = end_time - start_time;
+
+        // Fill the placeholder with the framerate you want.
+        const int64_t delay_time = (1000 * 1000 / ..) - interval;
+
+        // Delay.
+        vTaskDelay(pdMS_TO_TICKS(fmax(delay_time, 0) / 1000));
+	}
 }
 ```
 
