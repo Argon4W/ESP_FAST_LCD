@@ -1,0 +1,10 @@
+version: "1.0.0"
+maintainers:
+  - "Argon4W"
+description: "Fast LCD rendering infrastructure specialized for ESP32-S3."
+license: "MIT License"
+url: "https://github.com/Argon4W/ESP_FAST_LCD"
+repository: "https://github.com/Argon4W/ESP_FAST_LCD.git"
+issues: "https://github.com/Argon4W/ESP_FAST_LCD/issues"
+dependencies:
+  idf: ">=5.0"

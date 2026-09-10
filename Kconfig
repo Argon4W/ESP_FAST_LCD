@@ -1,0 +1,9 @@
+menu "ESP_FAST_LCD Configurations"
+
+	config ESP_FAST_LCD_DEBUG_LOGGING
+		bool "Enable debug logging"
+		default n
+		help
+			Enable this option will enable the output of debug logging.
+
+endmenu
