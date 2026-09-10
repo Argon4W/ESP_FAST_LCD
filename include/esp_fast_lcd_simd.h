@@ -45,7 +45,7 @@ static const uint16_t uint16_lsb_8_bitmask = 0b0000000011111111U;
 /**
  * @brief The higher 8-bit (MSB) bitmask of uint16_t.
  */
-static const uint16_t u1nt16_msb_8_bitmask = 0b1111111100000000U;
+static const uint16_t uint16_msb_8_bitmask = 0b1111111100000000U;
 
 /**
  * @}
@@ -59,7 +59,7 @@ static const uint16_t left_shift_8 = 256U; // (1 << 8U);
 /**
  * The addressable multiplier 8 that is equivalent to left-shifting the multiplicand by 3 bits.
  */
-static const uint16_t left_shift_3 = 8U; // (1 << 8U);
+static const uint16_t left_shift_3 = 8U; // (1 << 3U);
 
 /**
  * The addressable multiplier of right-shifting the multiplicand by vector multiplication and SAR.
@@ -83,7 +83,7 @@ static const uint16_t value_255 = 255U;
  * @param a_ptr	The first pointer to check.
  * @param b_ptr	The second pointer to check.
  */
-#define is_same_align_4byte(a_ptr, b_ptr) (((((uintptr_t) (a_ptr)) ^ ((uintptr_t) (b_ptr))) ^ 0b11U) == 0U)
+#define is_same_align_4byte(a_ptr, b_ptr) (((((uintptr_t) (a_ptr)) ^ ((uintptr_t) (b_ptr))) & 0b11U) == 0U)
 
 /**
  * @brief		True if two pointers have the exact same lower 4 bits, which means that they can both be 16-byte aligned
@@ -91,7 +91,7 @@ static const uint16_t value_255 = 255U;
  * @param a_ptr	The first pointer to check.
  * @param b_ptr	The second pointer to check.
  */
-#define is_same_align_16byte(a_ptr, b_ptr) (((((uintptr_t) (a_ptr)) ^ ((uintptr_t) (b_ptr))) ^ 0b1111U) == 0U)
+#define is_same_align_16byte(a_ptr, b_ptr) (((((uintptr_t) (a_ptr)) ^ ((uintptr_t) (b_ptr))) & 0b1111U) == 0U)
 
 /**
  * @brief					This instruction forces the lower 4 bits of the access address src_address to 0 and loads

@@ -14,7 +14,7 @@ extern "C" {
 /**
  * @brief The capabilities for allocating framebuffers and ring buffer slots.
  */
-#define DMA_CAPS MALLOC_CAP_DMA | MALLOC_CAP_8BIT
+#define DMA_CAPS (MALLOC_CAP_DMA | MALLOC_CAP_8BIT)
 
 /**
  * @brief The configuration struct of a LCD panel device.

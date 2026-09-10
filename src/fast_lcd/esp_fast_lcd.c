@@ -25,7 +25,7 @@ esp_err_t esp_fast_lcd_new_lcd_panel_device(
 	#endif // CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
 
 	// Reserve handles for the LCD panel device.
-	esp_fast_lcd_panel_device_t*			panel_device_out			= NULL;
+	esp_fast_lcd_panel_device_t*			panel_device				= NULL;
 	esp_fast_lcd_panel_transfer_queue_t*	panel_transfer_queue		= NULL;
 	esp_fast_lcd_panel_properties_t*		panel_properties			= NULL;
 	uint16_t*								transfer_queue_framebuffer	= NULL;
@@ -79,7 +79,7 @@ esp_err_t esp_fast_lcd_new_lcd_panel_device(
 	transfer_queue_free_buffer = xSemaphoreCreateCounting(ring_buffer_slot_count, ring_buffer_slot_count);
 
 	// Allocate the handles of the panel device.
-	panel_device_out		= calloc(1, sizeof(esp_fast_lcd_panel_device_t));
+	panel_device			= calloc(1, sizeof(esp_fast_lcd_panel_device_t));
 	panel_properties		= calloc(1, sizeof(esp_fast_lcd_panel_properties_t));
 	panel_transfer_queue	= calloc(1, sizeof(esp_fast_lcd_panel_transfer_queue_t));
 
@@ -90,9 +90,11 @@ esp_err_t esp_fast_lcd_new_lcd_panel_device(
 
 	// Check the allocations.
 	ESP_GOTO_ON_FALSE(transfer_queue_free_buffer	!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create free buffer counter of the ring buffer for LCD panel device \"%s\".",	name);
+	ESP_GOTO_ON_FALSE(panel_device					!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create panel device struct for LCD panel device \"%s\".",						name);
 	ESP_GOTO_ON_FALSE(panel_properties				!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create transfer queue for LCD panel device \"%s\".",							name);
-	ESP_GOTO_ON_FALSE(panel_transfer_queue			!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create ring buffer for LCD panel device \"%s\".",								name);
+	ESP_GOTO_ON_FALSE(panel_transfer_queue			!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create transfer queue for LCD panel device \"%s\".",							name);
 	ESP_GOTO_ON_FALSE(transfer_queue_framebuffer	!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create framebuffer for LCD panel device \"%s\".",								name);
+	ESP_GOTO_ON_FALSE(transfer_queue_ring_buffer	!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create ring buffer for LCD panel device \"%s\".",								name);
 	ESP_GOTO_ON_FALSE(transfer_queue_dirty_tiles	!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create dirty tiles bitmap for LCD panel device \"%s\".",						name);
 
 	// Log the progress if LCD panel debug logging is enabled.
@@ -133,12 +135,12 @@ esp_err_t esp_fast_lcd_new_lcd_panel_device(
 	panel_properties->frame_tile_count		= frame_tile_count;
 
 	// Fill LCD panel device handle with the transfer queue, properties and esp_lcd panel handle.
-	panel_device_out->transfer_queue	= panel_transfer_queue;
-	panel_device_out->properties		= panel_properties;
-	panel_device_out->handle			= panel_handle;
+	panel_device->transfer_queue	= panel_transfer_queue;
+	panel_device->properties		= panel_properties;
+	panel_device->handle			= panel_handle;
 
 	// Return the created panel device handle.
-	*panel_device_ret = panel_device_out;
+	*panel_device_ret = panel_device;
 
 	// Log the progress if LCD panel debug logging is enabled.
 	#ifdef CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
