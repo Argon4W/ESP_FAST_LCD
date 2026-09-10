@@ -112,7 +112,7 @@ esp_err_t esp_fast_lcd_new_lcd_panel_device(
 		/* io		= */ panel_io,
 		/* cbs		= */ &esp_lcd_panel_io_callback,
 		/* user_ctx	= */ panel_device
-	), error, ESP_FAST_LCD_TAG, "Failed to register SPI callbacks of ST7735.");
+	), error, ESP_FAST_LCD_TAG, "Failed to register SPI callbacks of LCD panel device \"%s\".", name);
 
 	// Log the progress if LCD panel debug logging is enabled.
 	#ifdef CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
