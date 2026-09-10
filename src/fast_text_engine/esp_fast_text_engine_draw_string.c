@@ -14,15 +14,8 @@ esp_err_t esp_fast_text_engine_draw_native_string(
 			char*								string
 ) {
 	// We cannot proceed without contexts.
-	if (	text_engine_context		== NULL
-		||	panel_device_context	== NULL
-	) {
-		// Log the error if LCD panel debug logging is enabled.
-		#ifdef CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
-			ESP_LOGE(ESP_FAST_TEXT_ENGINE_TAG, "No esp_fast_text_engine_instance_t or esp_fast_lcd_panel_device_t handle provided when performing drawing an opaque native string.");
-		#endif // CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
-		return ESP_ERR_INVALID_ARG;
-	}
+	ESP_RETURN_ON_FALSE(text_engine_context		!= NULL, ESP_ERR_INVALID_ARG, ESP_FAST_TEXT_ENGINE_TAG, "No esp_fast_text_engine_instance_t handle provided when performing drawing an opaque native string.");
+	ESP_RETURN_ON_FALSE(panel_device_context	!= NULL, ESP_ERR_INVALID_ARG, ESP_FAST_TEXT_ENGINE_TAG, "No esp_fast_lcd_panel_device_t handle provided when performing drawing an opaque native string.");
 
 	// Get the width and height of the glyph in pixels.
 	const esp_fast_text_engine_instance_properties_t*	properties			= text_engine_context	->properties;
@@ -127,15 +120,8 @@ esp_err_t esp_fast_text_engine_draw_string(
 			char*								string
 ) {
 	// We cannot proceed without contexts.
-	if (	text_engine_context		== NULL
-		||	panel_device_context	== NULL
-	) {
-		// Log the error if LCD panel debug logging is enabled.
-		#ifdef CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
-			ESP_LOGE(ESP_FAST_TEXT_ENGINE_TAG, "No esp_fast_text_engine_instance_t or esp_fast_lcd_panel_device_t handle provided when performing drawing a translucent string.");
-		#endif // CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
-		return ESP_ERR_INVALID_ARG;
-	}
+	ESP_RETURN_ON_FALSE(text_engine_context		!= NULL, ESP_ERR_INVALID_ARG, ESP_FAST_TEXT_ENGINE_TAG, "No esp_fast_text_engine_instance_t handle provided when performing drawing a translucent string.");
+	ESP_RETURN_ON_FALSE(panel_device_context	!= NULL, ESP_ERR_INVALID_ARG, ESP_FAST_TEXT_ENGINE_TAG, "No esp_fast_lcd_panel_device_t handle provided when performing drawing a translucent string.");
 
 	// Get the width and height of the glyph in pixels.
 	const esp_fast_text_engine_instance_properties_t*	properties			= text_engine_context	->properties;

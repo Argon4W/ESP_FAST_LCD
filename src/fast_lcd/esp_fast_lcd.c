@@ -91,7 +91,7 @@ esp_err_t esp_fast_lcd_new_lcd_panel_device(
 	// Check the allocations.
 	ESP_GOTO_ON_FALSE(transfer_queue_free_buffer	!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create free buffer counter of the ring buffer for LCD panel device \"%s\".",	name);
 	ESP_GOTO_ON_FALSE(panel_device					!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create panel device struct for LCD panel device \"%s\".",						name);
-	ESP_GOTO_ON_FALSE(panel_properties				!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create transfer queue for LCD panel device \"%s\".",							name);
+	ESP_GOTO_ON_FALSE(panel_properties				!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create properties for LCD panel device \"%s\".",								name);
 	ESP_GOTO_ON_FALSE(panel_transfer_queue			!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create transfer queue for LCD panel device \"%s\".",							name);
 	ESP_GOTO_ON_FALSE(transfer_queue_framebuffer	!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create framebuffer for LCD panel device \"%s\".",								name);
 	ESP_GOTO_ON_FALSE(transfer_queue_ring_buffer	!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_LCD_TAG, "Failed to create ring buffer for LCD panel device \"%s\".",								name);
@@ -111,7 +111,7 @@ esp_err_t esp_fast_lcd_new_lcd_panel_device(
 	ESP_GOTO_ON_ERROR(esp_lcd_panel_io_register_event_callbacks(
 		/* io		= */ panel_io,
 		/* cbs		= */ &esp_lcd_panel_io_callback,
-		/* user_ctx	= */ panel_device_out
+		/* user_ctx	= */ panel_device
 	), error, ESP_FAST_LCD_TAG, "Failed to register SPI callbacks of ST7735.");
 
 	// Log the progress if LCD panel debug logging is enabled.
@@ -164,7 +164,7 @@ esp_err_t esp_fast_lcd_new_lcd_panel_device(
 	if (transfer_queue_framebuffer)	free				(transfer_queue_framebuffer);	// Cleanup the framebuffer.
 	if (panel_transfer_queue)		free				(panel_transfer_queue);			// Cleanup the transfer queue.
 	if (panel_properties)			free				(panel_properties);				// Cleanup the properties.
-	if (panel_device_out)			free				(panel_device_out);				// Cleanup the panel device struct.
+	if (panel_device)				free				(panel_device);					// Cleanup the panel device struct.
 
 	return ret;
 }

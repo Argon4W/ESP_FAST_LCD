@@ -1,3 +1,4 @@
+#include "esp_check.h"
 #include "esp_log.h"
 #include "esp_fast_lcd.h"
 #include "esp_fast_lcd_common.h"
@@ -9,13 +10,7 @@ esp_err_t esp_fast_lcd_draw_pixel(
 	const uint32_t						color_rgba8888
 ) {
 	// We cannot proceed without context.
-	if (context == NULL) {
-		// Log the error if LCD panel debug logging is enabled.
-		#ifdef CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
-			ESP_LOGE(ESP_FAST_LCD_TAG, "No esp_fast_lcd_panel_device_t handle provided when performing drawing a pixel.");
-		#endif // CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
-		return ESP_ERR_INVALID_ARG;
-	}
+	ESP_RETURN_ON_FALSE(context != NULL, ESP_ERR_INVALID_ARG, ESP_FAST_LCD_TAG, "No esp_fast_lcd_panel_device_t handle provided when performing drawing a pixel.");
 
 	// Skip the draw if the color is transparent.
 	if (color_rgba8888_is_transparent(color_rgba8888)) {

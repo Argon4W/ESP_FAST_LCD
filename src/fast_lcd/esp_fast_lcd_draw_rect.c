@@ -1,3 +1,4 @@
+#include "esp_check.h"
 #include "esp_log.h"
 #include "esp_fast_lcd.h"
 #include "esp_fast_lcd_common.h"
@@ -12,13 +13,7 @@ esp_err_t esp_fast_lcd_draw_native_rectangle(
 	const uint16_t						color_rgb565
 ) {
 	// We cannot proceed without context.
-	if (context == NULL) {
-		// Log the error if LCD panel debug logging is enabled.
-		#ifdef CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
-			ESP_LOGE(ESP_FAST_LCD_TAG, "No esp_fast_lcd_panel_device_t handle provided when performing drawing an opaque native rectangle.");
-		#endif // CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
-		return ESP_ERR_INVALID_ARG;
-	}
+	ESP_RETURN_ON_FALSE(context != NULL, ESP_ERR_INVALID_ARG, ESP_FAST_LCD_TAG, "No esp_fast_lcd_panel_device_t handle provided when performing drawing an opaque native rectangle.");
 
 	// Skip the draw if the rect has no size:
 	if (	size_x == 0U
@@ -204,13 +199,7 @@ esp_err_t esp_fast_lcd_draw_rectangle(
 	const uint32_t						color_rgba8888
 ) {
 	// We cannot proceed without context.
-	if (context == NULL) {
-		// Log the error if LCD panel debug logging is enabled.
-		#ifdef CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
-			ESP_LOGE(ESP_FAST_LCD_TAG, "No esp_fast_LCD_panel_device_t handle provided when performing drawing a translucent rectangle.");
-		#endif // CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
-		return ESP_ERR_INVALID_ARG;
-	}
+	ESP_RETURN_ON_FALSE(context != NULL, ESP_ERR_INVALID_ARG, ESP_FAST_LCD_TAG, "No esp_fast_lcd_panel_device_t handle provided when performing drawing a translucent rectangle.");
 
 	// Skip the draw if the rect:
 	if (	size_x == 0U									// has no size.

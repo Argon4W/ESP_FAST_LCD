@@ -1,4 +1,5 @@
 #include "stdalign.h"
+#include "esp_check.h"
 #include "esp_log.h"
 #include "esp_fast_lcd.h"
 #include "esp_fast_lcd_common.h"
@@ -17,13 +18,7 @@ esp_err_t esp_fast_lcd_draw_bitmap(
 	const uint32_t*						bitmap_rgba8888
 ) {
 	// We cannot proceed without context.
-	if (context == NULL) {
-		// Log the error if LCD panel debug logging is enabled.
-		#ifdef CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
-			ESP_LOGE(ESP_FAST_LCD_TAG, "NO esp_fast_lcd_panel_device_t handle provided when performing drawing a translucent bitmap.");
-		#endif // CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
-		return ESP_ERR_INVALID_ARG;
-	}
+	ESP_RETURN_ON_FALSE(context != NULL, ESP_ERR_INVALID_ARG, ESP_FAST_LCD_TAG, "No esp_fast_lcd_panel_device_t handle provided when performing drawing a translucent bitmap.");
 
 	// Skip the draw if the bitmap has no size.
 	if (	size_x == 0
@@ -594,13 +589,7 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv(
 	const uint16_t*						bitmap_a8_inv
 ) {
 	// We cannot proceed without context.
-	if (context == NULL) {
-		// Log the error if LCD panel debug logging is enabled.
-		#ifdef CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
-			ESP_LOGE(ESP_FAST_LCD_TAG, "NO esp_fast_lcd_panel_device_t handle provided when performing drawing a translucent native bitmap.");
-		#endif // CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
-		return ESP_ERR_INVALID_ARG;
-	}
+	ESP_RETURN_ON_FALSE(context != NULL, ESP_ERR_INVALID_ARG, ESP_FAST_LCD_TAG, "No esp_fast_lcd_panel_device_t handle provided when performing drawing a translucent native bitmap.");
 
 	// Skip the draw if the bitmap has no size.
 	if (	size_x == 0
@@ -1056,13 +1045,7 @@ esp_err_t esp_fast_lcd_draw_native_bitmap(
 	const	uint16_t*						bitmap_rgb565
 ) {
 	// We cannot proceed without context.
-	if (context == NULL) {
-		// Log the error if LCD panel debug logging is enabled.
-		#ifdef CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
-			ESP_LOGE(ESP_FAST_LCD_TAG, "NO esp_fast_lcd_panel_device_t handle provided when performing drawing a opaque native bitmap.");
-		#endif // CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
-		return ESP_ERR_INVALID_ARG;
-	}
+	ESP_RETURN_ON_FALSE(context != NULL, ESP_ERR_INVALID_ARG, ESP_FAST_LCD_TAG, "No esp_fast_lcd_panel_device_t handle provided when performing drawing an opaque native bitmap.");
 
 	// Skip the draw if the bitmap has no size.
 	if (	size_x == 0

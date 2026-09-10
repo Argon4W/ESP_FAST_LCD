@@ -15,15 +15,8 @@ esp_err_t esp_fast_text_engine_draw_native_outlined_string(
 			char*								string
 ) {
 	// We cannot proceed without contexts.
-	if (	text_engine_context		== NULL
-		||	panel_device_context	== NULL
-	) {
-		// Log the error if LCD panel debug logging is enabled.
-		#ifdef CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
-			ESP_LOGE(ESP_FAST_TEXT_ENGINE_TAG, "No esp_fast_text_engine_instance_t or esp_fast_lcd_panel_device_t handle provided when performing drawing an opaque native outlined string.");
-		#endif // CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
-		return ESP_ERR_INVALID_ARG;
-	}
+	ESP_RETURN_ON_FALSE(text_engine_context		!= NULL, ESP_ERR_INVALID_ARG, ESP_FAST_TEXT_ENGINE_TAG, "No esp_fast_text_engine_instance_t handle provided when performing drawing an opaque native outlined string.");
+	ESP_RETURN_ON_FALSE(panel_device_context	!= NULL, ESP_ERR_INVALID_ARG, ESP_FAST_TEXT_ENGINE_TAG, "No esp_fast_lcd_panel_device_t handle provided when performing drawing an opaque native outlined string.");
 
 	// Route to regular native glyph draw if no outline in this text engine instance.
 	if (text_engine_context->properties->configuration.font_outline_radius == 0U) {
@@ -166,15 +159,8 @@ esp_err_t esp_fast_text_engine_draw_outlined_string(
 			char*								string
 ) {
 	// We cannot proceed without contexts.
-	if (	text_engine_context		== NULL
-		||	panel_device_context	== NULL
-	) {
-		// Log the error if LCD panel debug logging is enabled.
-		#ifdef CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
-			ESP_LOGE(ESP_FAST_TEXT_ENGINE_TAG, "No esp_fast_text_engine_instance_t or esp_fast_lcd_panel_device_t handle provided when performing drawing a translucent outlined string.");
-		#endif // CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
-		return ESP_ERR_INVALID_ARG;
-	}
+	ESP_RETURN_ON_FALSE(text_engine_context		!= NULL, ESP_ERR_INVALID_ARG, ESP_FAST_TEXT_ENGINE_TAG, "No esp_fast_text_engine_instance_t handle provided when performing drawing a translucent outlined string.");
+	ESP_RETURN_ON_FALSE(panel_device_context	!= NULL, ESP_ERR_INVALID_ARG, ESP_FAST_TEXT_ENGINE_TAG, "No esp_fast_lcd_panel_device_t handle provided when performing drawing a translucent outlined string.");
 
 	// Route to regular native glyph draw if no outline in this text engine instance.
 	if (text_engine_context->properties->configuration.font_outline_radius == 0U) {

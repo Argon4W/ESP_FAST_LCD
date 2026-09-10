@@ -10,13 +10,7 @@ esp_err_t esp_fast_lcd_commit(const esp_fast_lcd_panel_device_t* context) {
 	esp_err_t ret = ESP_OK;
 
 	// We cannot proceed without context.
-	if (context == NULL) {
-		// Log the error if LCD panel debug logging is enabled.
-		#ifdef CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
-			ESP_LOGE(ESP_FAST_LCD_TAG, "NO esp_fast_lcd_panel_device_t handle provided when performing a commit.");
-		#endif // CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
-		return ESP_ERR_INVALID_ARG;
-	}
+	ESP_RETURN_ON_FALSE(context != NULL, ESP_ERR_INVALID_ARG, ESP_FAST_LCD_TAG, "No esp_fast_lcd_panel_device_t handle provided when performing a commit.");
 
 	// Get the transfer queue and properties from the LCD panel device context.
 	const	esp_fast_lcd_panel_properties_t*		properties		= context->properties;
