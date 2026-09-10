@@ -1259,7 +1259,7 @@ esp_err_t esp_fast_lcd_draw_native_bitmap_masked(
 	const	uint16_t*						bitmask_rgb565
 ) {
 	// We cannot proceed without context.
-	ESP_RETURN_ON_FALSE(context != NULL, ESP_ERR_INVALID_ARG, ESP_FAST_LCD_TAG, "No esp_fast_lcd_panel_device_t handle provided when performing drawing a opaque native masked bitmap.");
+	ESP_RETURN_ON_FALSE(context != NULL, ESP_ERR_INVALID_ARG, ESP_FAST_LCD_TAG, "No esp_fast_lcd_panel_device_t handle provided when performing drawing an opaque native masked bitmap.");
 
 	// Skip the draw if the bitmap has no size.
 	if (	size_x == 0
