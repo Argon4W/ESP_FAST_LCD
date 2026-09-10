@@ -37,7 +37,7 @@ void example() {
         .ring_buffer_slot_count = 3U,                   // The count of ring buffer slots of the transfer queue.
         .name                   = "device",             // The name of the panel device used for debugging.
         .buffer_flags           = MALLOC_CAP_INTERNAL   // The extra capability flags used to allocate the framebuffer and ring buffers.
-    }
+    };
     
     // Set up the configuration of the text engine instance.
     esp_fast_text_engine_instance_configuration_t text_engine_config = {
