@@ -30,7 +30,7 @@ void private_bake_atlas_from_1bpp(
  *						if it is not in the cache.
  * @param context		The text engine to look up or load the glyph.
  * @param codepoint		The codepoint of the glyph to look up or load.
- * @param pixel_buffer	The handle to receive the pixel buffer of the found or loaded glyph of given codepoint.
+ * @param glyph_buffer	The handle to receive the bitmask buffer of the found or loaded glyph of given codepoint.
  * @param glyph_size_x	The handle to receive the width in pixels of the found or loaded glyph of given
  *						codepoint.
  * @return				The RGB565 MSB first bitmask buffer of the glyph of the given codepoint.
@@ -38,7 +38,7 @@ void private_bake_atlas_from_1bpp(
 void private_lookup_or_load_glyph(
 	const	esp_fast_text_engine_instance_t*	context,
 			uint16_t							codepoint,
-			uint16_t**							pixel_buffer,
+			uint16_t**							glyph_buffer,
 			uint32_t*							glyph_size_x
 );
 
