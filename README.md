@@ -24,6 +24,7 @@ to run independently of the main logic thread.
 The following example shows how to use this library to draw rectangles and texts then commit changes to the esp_lcd.
 
 ```c++
+#include "esp_timer.h"
 #include "esp_fast_lcd.h"
 #include "esp_fast_text_engine.h"
 
