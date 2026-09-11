@@ -204,6 +204,7 @@ esp_err_t esp_fast_lcd_draw_native_rectangle_masked(
  * @param bitmap_pre_multiplied	True if the bitmap is pre-multiplied. ("Pre-multiplied" means that the R, G, and B components
  *								of a pixel is already pre-multiplied with the alpha of the pixel, and the alpha component
  *								of the pixel is replaced by the 255 - alpha.)
+ * @param bitmap_a8_multiplier	The 8-bit alpha multiplier to be applied on the draw of the bitmap.
  * @param bitmap_rgba8888		The color data of the bitmap of the slice to be drawn in RGBA 8888 format (MSB first,
  *								no strides between lines).
  * @return						The status of the draw.
@@ -218,6 +219,7 @@ esp_err_t esp_fast_lcd_draw_bitmap(
 			uint32_t						bitmap_offset_y,
 			uint32_t						bitmap_size_x,
 			uint8_t							bitmap_pre_multiplied,
+			uint8_t							bitmap_a8_multiplier,
 	const	uint32_t*						bitmap_rgba8888
 );
 
@@ -232,10 +234,15 @@ esp_err_t esp_fast_lcd_draw_bitmap(
  * @param bitmap_offset_x		The top-left origin position X of the slice on the bitmap, in pixels.
  * @param bitmap_offset_y		The top-left origin position Y of the slice on the bitmap, in pixels.
  * @param bitmap_size_x			The width of the bitmap, in pixels.
+ * @param bitmap_a8_multiplier	The 8-bit alpha multiplier to be applied on the draw of the bitmap.
+ * @param bitmap_flipped		True if the bitmap is flipped. ("Flipped" means that the LSB byte and the MSB byte of the
+ *								color of a pixel has already been flipped to get correct transmission byte order.) Usually
+ *								it should be false.
  * @param bitmap_rgb565_pre_mul	The color data of the bitmap of the slice to be drawn in pre-multiplied RGB565 format
  *								(MSB first, no strides between lines).
  * @param bitmap_a8_inv			The alpha data of the bitmap of the slice to be drawn in inverted A8 format (255 - alpha,
- *								no strides between lines) in lower 8-bit (LSB) of the 16-bit pixel.
+ *								no strides between lines) in lower 8-bit (LSB) of the 16-bit pixel, or NULL to treat alpha
+ *								as 255.
  * @return						The status of the draw.
 */
 esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv(
@@ -247,25 +254,28 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv(
 			uint32_t						bitmap_offset_x,
 			uint32_t						bitmap_offset_y,
 			uint32_t						bitmap_size_x,
+			uint8_t							bitmap_flipped,
+			uint8_t							bitmap_a8_multiplier,
 	const	uint16_t*						bitmap_rgb565_pre_mul,
 	const	uint16_t*						bitmap_a8_inv
 );
 
 /**
- * @brief					Draw a slice of native RGB565 bitmap on the framebuffer of the given LCD panel device.
- * @param context			The device to be drawn to.
- * @param position_x		The top-left origin position X of the bitmap slice to be drawn on the framebuffer.
- * @param position_y		The top-left origin position Y of the bitmap slice to be drawn on the framebuffer.
- * @param size_x			The width of the bitmap slice, in pixels.
- * @param size_y			The height of the bitmap slice, in pixels.
- * @param bitmap_offset_x	The top-left origin position X of the slice on the bitmap, in pixels.
- * @param bitmap_offset_y	The top-left origin position Y of the slice on the bitmap, in pixels.
- * @param bitmap_size_x		The width of the bitmap, in pixels.
- * @param bitmap_flipped	True if the bitmap is flipped. ("Flipped" means that the LSB byte and the MSB byte of the
- *							color of a pixel has already been flipped to get correct transmission byte order.)
- * @param bitmap_rgb565		The color data of the bitmap of the slice to be drawn in RGB 565 format (MSB first, no strides
- *							between lines).
- * @return					The status of the draw.
+ * @brief						Draw a slice of native RGB565 bitmap on the framebuffer of the given LCD panel device.
+ * @param context				The device to be drawn to.
+ * @param position_x			The top-left origin position X of the bitmap slice to be drawn on the framebuffer.
+ * @param position_y			The top-left origin position Y of the bitmap slice to be drawn on the framebuffer.
+ * @param size_x				The width of the bitmap slice, in pixels.
+ * @param size_y				The height of the bitmap slice, in pixels.
+ * @param bitmap_offset_x		The top-left origin position X of the slice on the bitmap, in pixels.
+ * @param bitmap_offset_y		The top-left origin position Y of the slice on the bitmap, in pixels.
+ * @param bitmap_size_x			The width of the bitmap, in pixels.
+ * @param bitmap_flipped		True if the bitmap is flipped. ("Flipped" means that the LSB byte and the MSB byte of the
+ *								color of a pixel has already been flipped to get correct transmission byte order.)
+ * @param bitmap_a8_multiplier	The 8-bit alpha multiplier to be applied on the draw of the bitmap.
+ * @param bitmap_rgb565			The color data of the bitmap of the slice to be drawn in RGB 565 format (MSB first, no strides
+ *								between lines).
+ * @return						The status of the draw.
 */
 esp_err_t esp_fast_lcd_draw_native_bitmap(
 	const	esp_fast_lcd_panel_device_t*	context,
@@ -277,6 +287,7 @@ esp_err_t esp_fast_lcd_draw_native_bitmap(
 			uint32_t						bitmap_offset_y,
 			uint32_t						bitmap_size_x,
 			uint8_t							bitmap_flipped,
+			uint8_t							bitmap_a8_multiplier,
 	const	uint16_t*						bitmap_rgb565
 );
 
@@ -298,6 +309,7 @@ esp_err_t esp_fast_lcd_draw_native_bitmap(
  *								of the pixel is replaced by the 255 - alpha.)
  * @param bitmask_flipped		True if the bitmask is flipped. ("Flipped" means that the LSB byte and the MSB byte of the
  *								bitmask of a pixel has already been flipped to get correct transmission byte order.)
+ * @param bitmap_a8_multiplier	The 8-bit alpha multiplier to be applied on the draw of the bitmap.
  * @param bitmap_rgba8888		The color data of the bitmap of the slice to be drawn in RGBA 8888 format (MSB first,
  *								no strides between lines).
  * @param bitmask_rgb565		The bitmask data of the bitmask slice to be applied to be bitmap slice to be drawn, in 16
@@ -318,6 +330,7 @@ esp_err_t esp_fast_lcd_draw_bitmap_masked(
 			uint32_t						bitmask_size_x,
 			uint8_t							bitmap_pre_multiplied,
 			uint8_t							bitmask_flipped,
+			uint8_t							bitmap_a8_multiplier,
 	const	uint32_t*						bitmap_rgba8888,
 	const	uint16_t*						bitmask_rgb565
 );
@@ -337,12 +350,17 @@ esp_err_t esp_fast_lcd_draw_bitmap_masked(
  * @param bitmask_offset_x		The top-left origin position X of the bitmask slice on the bitmask, in pixels.
  * @param bitmask_offset_y		The top-left origin position Y of the bitmask slice on the bitmask, in pixels.
  * @param bitmask_size_x		The width of the bitmask, in pixels.
+ * @param bitmap_flipped		True if the bitmap is flipped. ("Flipped" means that the LSB byte and the MSB byte of the
+ *								color of a pixel has already been flipped to get correct transmission byte order.) Usually
+ *								it should be false.
  * @param bitmask_flipped		True if the bitmask is flipped. ("Flipped" means that the LSB byte and the MSB byte of the
  *								bitmask of a pixel has already been flipped to get correct transmission byte order.)
+ * @param bitmap_a8_multiplier	The 8-bit alpha multiplier to be applied on the draw of the bitmap.
  * @param bitmap_rgb565_pre_mul	The color data of the bitmap of the slice to be drawn in pre-multiplied RGB565 format
  *								(MSB first, no strides between lines).
  * @param bitmap_a8_inv			The alpha data of the bitmap of the slice to be drawn in inverted A8 format (255 - alpha,
- *								no strides between lines) in lower 8-bit (LSB) of the 16-bit pixel.
+ *								no strides between lines) in lower 8-bit (LSB) of the 16-bit pixel, or NULL to treat alpha
+ *								as 255.
  * @param bitmask_rgb565		The bitmask data of the bitmask slice to be applied to be bitmap slice to be drawn, in 16
  *								bits-per-pixel.
  * @return						The status of the draw.
@@ -359,34 +377,37 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv_masked(
 			uint32_t						bitmask_offset_x,
 			uint32_t						bitmask_offset_y,
 			uint32_t						bitmask_size_x,
+			uint8_t							bitmap_flipped,
 			uint8_t							bitmask_flipped,
+			uint8_t							bitmap_a8_multiplier,
 	const	uint16_t*						bitmap_rgb565_pre_mul,
 	const	uint16_t*						bitmap_a8_inv,
 	const	uint16_t*						bitmask_rgb565
 );
 
 /**
- * @brief					Draw a slice of bit-masked native RGB565 bitmap on the framebuffer of the given LCD panel device.
- * @param context			The device to be drawn to.
- * @param position_x		The top-left origin position X of the bitmap slice to be drawn on the framebuffer.
- * @param position_y		The top-left origin position Y of the bitmap slice to be drawn on the framebuffer.
- * @param size_x			The width of the bitmap slice, in pixels.
- * @param size_y			The height of the bitmap slice, in pixels.
- * @param bitmap_offset_x	The top-left origin position X of the slice on the bitmap, in pixels.
- * @param bitmap_offset_y	The top-left origin position Y of the slice on the bitmap, in pixels.
- * @param bitmap_size_x		The width of the bitmap, in pixels.
- * @param bitmask_offset_x	The top-left origin position X of the bitmask slice on the bitmask, in pixels.
- * @param bitmask_offset_y	The top-left origin position Y of the bitmask slice on the bitmask, in pixels.
- * @param bitmask_size_x	The width of the bitmask, in pixels.
- * @param bitmap_flipped	True if the bitmap is flipped. ("Flipped" means that the LSB byte and the MSB byte of the
- *							color of a pixel has already been flipped to get correct transmission byte order.)
- * @param bitmask_flipped	True if the bitmask is flipped. ("Flipped" means that the LSB byte and the MSB byte of the
- *							bitmask of a pixel has already been flipped to get correct transmission byte order.)
- * @param bitmap_rgb565		The color data of the bitmap of the slice to be drawn in RGB 565 format (MSB first, no strides
- *							between lines).
- * @param bitmask_rgb565	The bitmask data of the bitmask slice to be applied to be bitmap slice to be drawn, in 16
- *							bits-per-pixel.
- * @return					The status of the draw.
+ * @brief						Draw a slice of bit-masked native RGB565 bitmap on the framebuffer of the given LCD panel device.
+ * @param context				The device to be drawn to.
+ * @param position_x			The top-left origin position X of the bitmap slice to be drawn on the framebuffer.
+ * @param position_y			The top-left origin position Y of the bitmap slice to be drawn on the framebuffer.
+ * @param size_x				The width of the bitmap slice, in pixels.
+ * @param size_y				The height of the bitmap slice, in pixels.
+ * @param bitmap_offset_x		The top-left origin position X of the slice on the bitmap, in pixels.
+ * @param bitmap_offset_y		The top-left origin position Y of the slice on the bitmap, in pixels.
+ * @param bitmap_size_x			The width of the bitmap, in pixels.
+ * @param bitmask_offset_x		The top-left origin position X of the bitmask slice on the bitmask, in pixels.
+ * @param bitmask_offset_y		The top-left origin position Y of the bitmask slice on the bitmask, in pixels.
+ * @param bitmask_size_x		The width of the bitmask, in pixels.
+ * @param bitmap_flipped		True if the bitmap is flipped. ("Flipped" means that the LSB byte and the MSB byte of the
+ *								color of a pixel has already been flipped to get correct transmission byte order.)
+ * @param bitmask_flipped		True if the bitmask is flipped. ("Flipped" means that the LSB byte and the MSB byte of the
+ *								bitmask of a pixel has already been flipped to get correct transmission byte order.)
+ * @param bitmap_a8_multiplier	The 8-bit alpha multiplier to be applied on the draw of the bitmap.
+ * @param bitmap_rgb565			The color data of the bitmap of the slice to be drawn in RGB 565 format (MSB first, no strides
+ *								between lines).
+ * @param bitmask_rgb565		The bitmask data of the bitmask slice to be applied to be bitmap slice to be drawn, in 16
+ *								bits-per-pixel.
+ * @return						The status of the draw.
 */
 esp_err_t esp_fast_lcd_draw_native_bitmap_masked(
 	const	esp_fast_lcd_panel_device_t*	context,
@@ -402,6 +423,7 @@ esp_err_t esp_fast_lcd_draw_native_bitmap_masked(
 			uint32_t						bitmask_size_x,
 			uint8_t							bitmap_flipped,
 			uint8_t							bitmask_flipped,
+			uint8_t							bitmap_a8_multiplier,
 	const	uint16_t*						bitmap_rgb565,
 	const	uint16_t*						bitmask_rgb565
 );

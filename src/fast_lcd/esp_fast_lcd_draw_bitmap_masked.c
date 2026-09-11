@@ -20,6 +20,7 @@ esp_err_t esp_fast_lcd_draw_bitmap_masked(
 	const uint32_t						bitmask_size_x,
 	const uint8_t						bitmap_pre_multiplied,
 	const uint8_t						bitmask_flipped,
+	const uint8_t						bitmap_a8_multiplier,
 	const uint32_t*						bitmap_rgba8888,
 	const uint16_t*						bitmask_rgb565
 ) {
@@ -30,6 +31,11 @@ esp_err_t esp_fast_lcd_draw_bitmap_masked(
 	if (	size_x == 0
 		||	size_y == 0
 	) {
+		return ESP_OK;
+	}
+
+	// Skip the draw if the bitmap is invisible.
+	if (bitmap_a8_multiplier == 0U) {
 		return ESP_OK;
 	}
 
@@ -145,15 +151,44 @@ esp_err_t esp_fast_lcd_draw_bitmap_masked(
 						continue;
 					}
 
+					// Apply the multiplier to alpha first if it is not opaque.
+					if (bitmap_a8_multiplier != 255U) {
+						// Invert the a8_src_inv back, apply the multiplier, then invert the alpha again.
+						a8_src_inv = 255U - unorm8_mul_exact(bitmap_a8_multiplier, 255U - a8_src_inv);
+					}
+
+					// Skip if the pixel is transparent after the multiplier is applied (edge case).
+					if (a8_src_inv == 255U) {
+						continue;
+					}
+
 					// Get the pre-multiplied RGBA8888 color components.
 					r8_src_pre_mul = (uint8_t) ((color_src_rgba8888 >> 24U)	& 0xFFU);
 					g8_src_pre_mul = (uint8_t) ((color_src_rgba8888 >> 16U)	& 0xFFU);
 					b8_src_pre_mul = (uint8_t) ((color_src_rgba8888 >> 8U)	& 0xFFU);
+
+					// Apply the multiplier if it is not opaque.
+					if (bitmap_a8_multiplier != 255U) {
+						// Apply the multiplier to R/G/B components.
+						r8_src_pre_mul = unorm8_mul_exact(bitmap_a8_multiplier, r8_src_pre_mul);
+						g8_src_pre_mul = unorm8_mul_exact(bitmap_a8_multiplier, g8_src_pre_mul);
+						b8_src_pre_mul = unorm8_mul_exact(bitmap_a8_multiplier, b8_src_pre_mul);
+					}
 				} else {
 					// Get the alpha component of the rgba8888.
-					const uint8_t a8_src = (uint8_t) ((color_src_rgba8888 >> 0U) & 0xFFU);
+					uint8_t a8_src = (uint8_t) ((color_src_rgba8888 >> 0U) & 0xFFU);
 
 					// Skip is the pixel is transparent.
+					if (a8_src == 0U) {
+						continue;
+					}
+
+					// Apply the multiplier if it is not opaque.
+					if (bitmap_a8_multiplier != 255U) {
+						a8_src = unorm8_mul_exact(bitmap_a8_multiplier, a8_src);
+					}
+
+					// Skip is the pixel is transparent after the multiplier is applied (edge case).
 					if (a8_src == 0U) {
 						continue;
 					}
@@ -249,6 +284,9 @@ esp_err_t esp_fast_lcd_draw_bitmap_masked(
 				);
 			}
 		} else {
+			// Alpha multiplier needs to be in 16-bit form instead of 8-bit form.
+			const uint16_t bitmap_a8_multiplier_16 = ((uint16_t) bitmap_a8_multiplier) & 0x00FFU;
+
 			// Extract the X cursor out of the loop for SIMD blend optimization.
 			uint32_t x = 0;
 
@@ -294,6 +332,7 @@ esp_err_t esp_fast_lcd_draw_bitmap_masked(
 
 				const uint16_t color_final_rgb565 = private_blend_color_fast_rgba8888(
 					/* color_src_rgba8888		= */ color_src_rgba8888,
+					/* color_src_a8_multiplier	= */ bitmap_a8_multiplier,
 					/* color_src_pre_multiplied	= */ bitmap_pre_multiplied,
 					/* color_dst_rgb565			= */ color_dst_rgb565
 				);
@@ -381,6 +420,17 @@ esp_err_t esp_fast_lcd_draw_bitmap_masked(
 
 				// Pre-multiply the RGBA8888 color if the bitmap is not pre-multiplied.
 				if (!bitmap_pre_multiplied) {
+					// Only apply the multiplier when it is not opaque.
+					if (bitmap_a8_multiplier != 255U) {
+						// Apply the multiplier to only the alpha if the color is not pre-multiplied.
+						asm volatile(
+							vector_broadcast_16(q7, arg(0)) // Broadcast the multiplier to the SIMD vector register to apply the multiplier.
+							vector_multiply_u16(q3, q3, q7) // Multiply the multiplier with alpha to apply the multiplier.
+							:
+							: /* arg(0) = */ "a"(&bitmap_a8_multiplier_16) // The multiplier broadcasted to the SIMD vector register.
+						);
+					}
+
 					// Pre-multiply the 8 8-bit R/G/B components with its alpha.
 					// The SAR is already 8 (divided by 256) now, no need to set the SAR again, results of the multiplication
 					// will be automatically divided by 256.
@@ -393,6 +443,24 @@ esp_err_t esp_fast_lcd_draw_bitmap_masked(
 						:
 						: /* arg(0) = */ "a"(&value_255) // The value 255 broadcasted to the SIMD vector register to invert alpha component.
 					);
+				} else {
+					// Only apply the multiplier when it is not opaque.
+					if (bitmap_a8_multiplier != 255U) {
+						// Apply the multiplier to the pre-multiplied R/G/B components and inverted alpha component.
+						asm volatile(
+							vector_broadcast_16(q7, arg(0)) // Broadcast the multiplier to the SIMD vector register to apply the multiplier.
+							vector_multiply_u16(q0, q0, q7) // Apply the multiplier to 8-bit red components.
+							vector_multiply_u16(q1, q1, q7) // Apply the multiplier to 8-bit green components.
+							vector_multiply_u16(q2, q2, q7) // Apply the multiplier to 8-bit blue components.
+							vector_broadcast_16(q6, arg(1)) // Broadcast the 255 to the SIMD vector register to invert the alpha.
+							vector_subtract_s16(q3, q6, q3) // Invert the alpha component back to non-inverted alpha.
+							vector_multiply_u16(q3, q3, q7) // Apply the multiplier to 8-bit alpha components.
+							vector_subtract_s16(q3, q6, q3) // Invert the alpha component again to inverted alpha.
+							:
+							:	/* arg(0) = */ "a"(&bitmap_a8_multiplier_16),	// The multiplier broadcasted to the SIMD vector register.
+								/* arg(1) = */ "a"(&value_255)					// The value 255 broadcasted to the SIMD vector register to invert alpha component.
+						);
+					}
 				}
 
 				// Note:
@@ -404,14 +472,14 @@ esp_err_t esp_fast_lcd_draw_bitmap_masked(
 
 				// Convert the RGBA8888 color components to RGB565 color formats.
 				asm volatile(
-					set_shift_amount(arg(0))		// Set the shift amount to 0 to convert red and green components (prevent right shifting).
-					vector_broadcast_16(q6, arg(1))	// Broadcast the equivalent multiplier of shifting 8 bits left to the SIMD vector register.
-					vector_broadcast_16(q7, arg(2))	// Broadcast the equivalent multiplier of shifting 3 bits left to the SIMD vector register.
-					vector_multiply_u16(q0, q0, q6) // Left shift the red components by 8 bits. Now the higher 5-bits of the red components is started from bit 11.
-					vector_multiply_u16(q1, q1, q7) // Left shift the green components by 3 bits. Now the higher 6-bits of the green components is started from bit 5.
-					vector_broadcast_16(q7, arg(3))	// Broadcast the ones to the SIMD vector register.
-					set_shift_amount(arg(4))		// Set the shift amount to 3 to convert the blue components.
-					vector_multiply_u16(q2, q2, q7)	// Right shift the blue components by 3 bits. Now the remaining 5-bits of the blue components is started from bit 0.
+					set_shift_amount	(arg(0))		// Set the shift amount to 0 to convert red and green components (prevent right shifting).
+					vector_broadcast_16	(q6, arg(1))	// Broadcast the equivalent multiplier of shifting 8 bits left to the SIMD vector register.
+					vector_broadcast_16	(q7, arg(2))	// Broadcast the equivalent multiplier of shifting 3 bits left to the SIMD vector register.
+					vector_multiply_u16	(q0, q0, q6)	// Left shift the red components by 8 bits. Now the higher 5-bits of the red components is started from bit 11.
+					vector_multiply_u16	(q1, q1, q7)	// Left shift the green components by 3 bits. Now the higher 6-bits of the green components is started from bit 5.
+					vector_broadcast_16	(q7, arg(3))	// Broadcast the ones to the SIMD vector register.
+					set_shift_amount	(arg(4))		// Set the shift amount to 3 to convert the blue components.
+					vector_multiply_u16	(q2, q2, q7)	// Right shift the blue components by 3 bits. Now the remaining 5-bits of the blue components is started from bit 0.
 					:
 					:	/* arg(0) = */ "a"(0),				// The value 0 set to SAR to prevent right shifting.
 						/* arg(1) = */ "a"(&left_shift_8),	// The value 256 broadcasted to the SIMD vector register to shift 8-bits left.
@@ -661,6 +729,7 @@ esp_err_t esp_fast_lcd_draw_bitmap_masked(
 
 				const uint16_t color_final_rgb565 = private_blend_color_fast_rgba8888(
 					/* color_src_rgba8888		= */ color_src_rgba8888,
+					/* color_src_a8_multiplier	= */ bitmap_a8_multiplier,
 					/* color_src_pre_multiplied	= */ bitmap_pre_multiplied,
 					/* color_dst_rgb565			= */ color_dst_rgb565
 				);
@@ -683,21 +752,23 @@ esp_err_t esp_fast_lcd_draw_bitmap_masked(
 }
 
 esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv_masked(
-	const	esp_fast_lcd_panel_device_t*	context,
-			int32_t							position_x,
-			int32_t							position_y,
-			uint32_t						size_x,
-			uint32_t						size_y,
-			uint32_t						bitmap_offset_x,
-			uint32_t						bitmap_offset_y,
-			uint32_t						bitmap_size_x,
-			uint32_t						bitmask_offset_x,
-			uint32_t						bitmask_offset_y,
-			uint32_t						bitmask_size_x,
-			uint8_t							bitmask_flipped,
-	const	uint16_t*						bitmap_rgb565_pre_mul,
-	const	uint16_t*						bitmap_a8_inv,
-	const	uint16_t*						bitmask_rgb565
+	const esp_fast_lcd_panel_device_t*	context,
+	const int32_t						position_x,
+	const int32_t						position_y,
+	const uint32_t						size_x,
+	const uint32_t						size_y,
+	const uint32_t						bitmap_offset_x,
+	const uint32_t						bitmap_offset_y,
+	const uint32_t						bitmap_size_x,
+	const uint32_t						bitmask_offset_x,
+	const uint32_t						bitmask_offset_y,
+	const uint32_t						bitmask_size_x,
+	const uint8_t						bitmap_flipped,
+	const uint8_t						bitmask_flipped,
+	const uint8_t						bitmap_a8_multiplier,
+	const uint16_t*						bitmap_rgb565_pre_mul,
+	const uint16_t*						bitmap_a8_inv,
+	const uint16_t*						bitmask_rgb565
 ) {
 	// We cannot proceed without context.
 	ESP_RETURN_ON_FALSE(context != NULL, ESP_ERR_INVALID_ARG, ESP_FAST_LCD_TAG, "No esp_fast_lcd_panel_device_t handle provided when performing drawing a translucent native masked bitmap.");
@@ -706,6 +777,11 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv_masked(
 	if (	size_x == 0
 		||	size_y == 0
 	) {
+		return ESP_OK;
+	}
+
+	// Skip the draw if the bitmap is invisible.
+	if (bitmap_a8_multiplier == 0U) {
 		return ESP_OK;
 	}
 
@@ -802,9 +878,17 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv_masked(
 				const uint32_t bitmap_index =	/* index_y = */ (clipped_start_offset_y + bitmap_offset_y + y) * bitmap_size_x +
 												/* index_x = */ (clipped_start_offset_x + bitmap_offset_x + x);
 
-				// Get the inverted alpha and color of the bitmap at given coordinate.
-				const uint16_t	color_src_rgb565_pre_mul	= bitmap_rgb565_pre_mul	[bitmap_index];
-				const uint16_t	color_src_a8_inv			= bitmap_a8_inv			[bitmap_index];
+				// Get the color of the bitmap at given coordinate.
+				uint16_t color_src_rgb565_pre_mul = bitmap_rgb565_pre_mul[bitmap_index];
+
+				// Flip the color back to get correct color order if the bitmap is flipped.
+				if (bitmap_flipped) {
+					color_src_rgb565_pre_mul = 	((color_src_rgb565_pre_mul >> 8U) & 0x00FFU)
+					|							((color_src_rgb565_pre_mul << 8U) & 0xFF00U);
+				}
+
+				// Get the inverted alpha of the bitmap at given coordinate or defaulted to 0.
+				const uint16_t color_src_a8_inv = bitmap_a8_inv != NULL ? bitmap_a8_inv[bitmap_index] : 0u;
 
 				// Skip if the pixel is transparent.
 				if (color_src_a8_inv == 255U) {
@@ -815,7 +899,7 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv_masked(
 				uint16_t color_final_rgb565;
 
 				// Use the pre-multiplied color directly if the pixel is opaque.
-				if (color_src_a8_inv == 0U) {
+				if (color_src_a8_inv == 0U && bitmap_a8_multiplier == 255U) {
 					color_final_rgb565 = color_src_rgb565_pre_mul;
 				} else {
 					// Flip the LSB and MSB to get the correct RGB565 color order.
@@ -825,6 +909,7 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv_masked(
 					// Blend the framebuffer color with the pre-multiplied color and the inverted-alpha.
 					color_final_rgb565 = private_blend_color_fast_rgb565_pre_mul(
 						/* color_src_a8_inv			= */ color_src_a8_inv,
+						/* color_src_a8_multiplier	= */ bitmap_a8_multiplier,
 						/* color_src_rgb565_pre_mul	= */ color_src_rgb565_pre_mul,
 						/* color_dst_rgb565			= */ color_dst_rgb565
 					);
@@ -854,6 +939,9 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv_masked(
 				);
 			}
 		} else {
+			// Alpha multiplier needs to be in 16-bit form instead of 8-bit form.
+			const uint16_t bitmap_a8_multiplier_16 = ((uint16_t) bitmap_a8_multiplier) & 0x00FFU;
+
 			// Extract the X cursor out of the loop for SIMD blend optimization.
 			uint32_t x = 0;
 
@@ -867,8 +955,8 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv_masked(
 											/* index_x = */ (clipped_start_offset_x + bitmap_offset_x + 0);
 
 			// Calculate the offset of the first pixel of the line at color and alpha bitmap.
-			const uint16_t* color_offset = &bitmap_rgb565_pre_mul	[bitmap_index];
-			const uint16_t* alpha_offset = &bitmap_a8_inv			[bitmap_index];
+			const uint16_t* color_offset =							&bitmap_rgb565_pre_mul	[bitmap_index];
+			const uint16_t* alpha_offset = bitmap_a8_inv != NULL ?	&bitmap_a8_inv			[bitmap_index] : NULL;
 
 			const uint16_t* mask_offset = &bitmask_rgb565[
 				/* index_y = */ (clipped_start_offset_y + bitmask_offset_y + y) * bitmask_size_x +
@@ -883,10 +971,16 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv_masked(
 			// Exit immediately when the padding or the size is reached.
 			for (; x < clipped_size_x && x < padding; x ++) {
 				// Get the bitmap color, the flipped original color, and the color bitmask of the pixel.
-				const	uint16_t color_dst_flipped			= dst_offset	[x];
-				const	uint16_t color_src_rgb565_pre_mul	= color_offset	[x];
-				const	uint16_t color_src_alpha_inv		= alpha_offset	[x];
-						uint16_t color_src_bitmask			= mask_offset	[x];
+				const	uint16_t color_dst_flipped			=							dst_offset	[x];
+				const	uint16_t color_src_alpha_inv		= alpha_offset != NULL ?	alpha_offset[x] : 0U;
+						uint16_t color_src_rgb565_pre_mul	=							color_offset[x];
+						uint16_t color_src_bitmask			=							mask_offset	[x];
+
+				// Flip the color back to get correct color order if the bitmap is flipped.
+				if (bitmap_flipped) {
+					color_src_rgb565_pre_mul = 	((color_src_rgb565_pre_mul >> 8U) & 0x00FFU)
+					|							((color_src_rgb565_pre_mul << 8U) & 0xFF00U);
+				}
 
 				// Flip the bitmask if the bitmap is not flipped.
 				if (flip_mask) {
@@ -900,6 +994,7 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv_masked(
 
 				const uint16_t color_final_rgb565 = private_blend_color_fast_rgb565_pre_mul(
 					/* color_src_a8_inv			= */ (uint8_t) color_src_alpha_inv,
+					/* color_src_a8_multiplier	= */ bitmap_a8_multiplier,
 					/* color_src_rgb565_pre_mul	= */ color_src_rgb565_pre_mul,
 					/* color_dst_rgb565			= */ color_dst_rgb565
 				);
@@ -938,10 +1033,10 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv_masked(
 			alignas(16) uint16_t b5_pre_mul			[8];
 
 			// Get the SIMD start offset of the framebuffer and the bitmap.
-					uint16_t* simd_offset_dst	= &dst_offset	[x];
-			const	uint16_t* simd_offset_color	= &color_offset	[x];
-			const	uint16_t* simd_offset_alpha	= &alpha_offset	[x];
-			const	uint16_t* simd_offset_mask	= &mask_offset	[x];
+					uint16_t* simd_offset_dst	=							&dst_offset		[x];
+			const	uint16_t* simd_offset_color	=							&color_offset	[x];
+			const	uint16_t* simd_offset_alpha	= alpha_offset != NULL ?	&alpha_offset	[x] : NULL;
+			const	uint16_t* simd_offset_mask	=							&mask_offset	[x];
 
 			// Evaluate the alignment of the bitmap offsets.
 			uint8_t color_offset_aligned	= is_same_align_16byte(simd_offset_dst, simd_offset_color);
@@ -968,6 +1063,15 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv_masked(
 					);
 				}
 
+				// Flip the bitmap color back to get the correct RGB565 color order if the bitmap is flipped.
+				if (bitmap_flipped) {
+					asm_vector_swap_16(
+						/* src_register = */ q3,
+						/* dst_register = */ q3,
+						/* tmp_register = */ q2
+					);
+				}
+
 				// Note:
 				// Now Q3 is the 8 bitmap pre-multiplied RGB565 colors.
 				// Q0, Q1, Q2, Q7 are free.
@@ -981,6 +1085,27 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv_masked(
 
 				// Note:
 				// Q0, Q1, Q2 is the extracted color components now.
+				// Q3, Q7 are free.
+
+				// Set the shift amount register to 8 to shift the multiplication result 8 bits right.
+				// aka. divided by 256. (to get approximately correct unorm8 value after multiplying the inverted alpha.)
+				asm volatile(set_shift_amount(arg(0)) :: "a"(8));
+
+				// Only apply the multiplier when it is not opaque.
+				if (bitmap_a8_multiplier != 255U) {
+					// Apply the multiplier to the pre-multiplied R/G/B components.
+					asm volatile(
+						vector_broadcast_16(q7, arg(0)) // Broadcast the multiplier to the SIMD vector register to apply the multiplier.
+						vector_multiply_u16(q0, q0, q7) // Apply the multiplier to 8-bit red components.
+						vector_multiply_u16(q1, q1, q7) // Apply the multiplier to 8-bit green components.
+						vector_multiply_u16(q2, q2, q7) // Apply the multiplier to 8-bit blue components.
+						:
+						:	/* arg(0) = */ "a"(&bitmap_a8_multiplier_16) // The multiplier broadcasted to the SIMD vector register.
+					);
+				}
+
+				// Note:
+				// Q0, Q1, Q2 is the extracted color components after the multiplier is applied now.
 				// Q3, Q7 are free.
 
 				// Blending requires red components to be 32-bits long, expand the q0 to q0 (low) + q7 (high).
@@ -1008,10 +1133,58 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv_masked(
 				);
 
 				// Note:
-				// We have finished the extraction, now we can blend the color together.
-				// The converted result has been offloaded to stack, so:
 				// Q4, Q5, Q6 are masks of color components of RGB565.
 				// Q0, Q1, Q2, Q3, Q7 are free.
+
+				// Separate the multiplier apply of the alpha from the RGB because we have no registers left (Q4, Q5, Q6 are masks).
+				// Load the inverted alpha to be multiplied to be original color to the SIMD vector register.
+				if (simd_offset_alpha != NULL) {
+					// Load from the alpha bitmap if it is not
+					if (alpha_offset_aligned) {
+						// Load 8 aligned 8-bit inverted alpha component in 16-bit form to the SIMD vector register.
+						asm volatile(vector_load_128_aligned(q7, arg(0), 16) : "+a"(simd_offset_alpha));
+					} else {
+						// Load two parts of unaligned inverted alpha then combine them together in to the SIMD vector register.
+						asm volatile(
+							vector_load_128_usar			(q3, arg(0),	16)	// Load lower n-bits data from the unaligned inverted alpha address.
+							vector_load_128_usar			(q7, arg(0),	0)	// Load the higher (128-n)-bits data from the unaligned inverted alpha address.
+							vector_shift_right_combined_256	(q7, q3,		q7)	// Combine two parts of the data together.
+							: /* arg(0) = */ "+a"(simd_offset_alpha)
+						);
+					}
+				} else {
+					// Fill the inverted alpha with 0 (equivalent to alpha 255) if the alpha bitmap does not exist.
+					asm volatile(vector_clear_zero(q7));
+				}
+
+				// Note:
+				// Q7 is the inverted alpha component now.
+				// Q4, Q5, Q6 are masks of color components of RGB565.
+				// Q0, Q1, Q2, Q3 are free.
+
+				// Only apply the multiplier when it is not opaque.
+				if (bitmap_a8_multiplier != 255U) {
+					// Apply the multiplier to the pre-multiplied R/G/B components.
+					// The SAR is already 8 (divided by 256) now, no need to set the SAR again, results of the multiplication
+					// will be automatically divided by 256.
+					asm volatile(
+						vector_broadcast_16(q2, arg(0)) // Broadcast the multiplier to the SIMD vector register to apply the multiplier.
+						vector_broadcast_16(q3, arg(1)) // Broadcast the 255 to the SIMD vector register to invert the alpha.
+						vector_subtract_s16(q7, q3, q7) // Invert the alpha component back to non-inverted alpha.
+						vector_multiply_u16(q7, q2, q7) // Apply the multiplier to 8-bit alpha components.
+						vector_subtract_s16(q7, q3, q7) // Invert the alpha component again to inverted alpha.
+						:
+						:	/* arg(0) = */ "a"(&bitmap_a8_multiplier_16),	// The multiplier broadcasted to the SIMD vector register.
+							/* arg(1) = */ "a"(&value_255)					// The value 255 broadcasted to the SIMD vector register to invert alpha component.
+					);
+				}
+
+				// Note:
+				// We have finished the extraction, now we can blend the color together.
+				// The converted result has been offloaded to stack, so:
+				// Q7 is the alpha after the multiplier is applied now.
+				// Q4, Q5, Q6 are masks of color components of RGB565.
+				// Q0, Q1, Q2, Q3 are free.
 
 				// Load 8 original colors from the framebuffer to the vector register.
 				// VLD.128.IP will increment the %0 operand register automatically by the third operand (0).
@@ -1021,7 +1194,7 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv_masked(
 				asm_vector_swap_16(
 					/* src_register = */ q3,
 					/* dst_register = */ q3,
-					/* tmp_register = */ q7
+					/* tmp_register = */ q2
 				);
 
 				// Extract the color components from RGB565.
@@ -1033,32 +1206,12 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv_masked(
 
 				// Note:
 				// Q0, Q1, Q2 is the original color now.
-				// Q3, Q7 are free.
-
-				// Set the shift amount register to 8 to shift the multiplication result 8 bits right.
-				// aka. divided by 256. (to get approximately correct unorm8 value after multiplying the inverted alpha.)
-				asm volatile(set_shift_amount(arg(0)) :: "a"(8));
-
-				// Load the inverted alpha to be multiplied to be original color to the SIMD vector register.
-				if (alpha_offset_aligned) {
-					// Load 8 aligned 8-bit inverted alpha component in 16-bit form to the SIMD vector register.
-					asm volatile(vector_load_128_aligned(q7, arg(0), 16) : "+a"(simd_offset_alpha));
-				} else {
-					// Load two parts of unaligned inverted alpha then combine them together in to the SIMD vector register.
-					asm volatile(
-						vector_load_128_usar			(q3, arg(0),	16)	// Load lower n-bits data from the unaligned inverted alpha address.
-						vector_load_128_usar			(q7, arg(0),	0)	// Load the higher (128-n)-bits data from the unaligned inverted alpha address.
-						vector_shift_right_combined_256	(q7, q3,		q7)	// Combine two parts of the data together.
-						: /* arg(0) = */ "+a"(simd_offset_alpha)
-					);
-				};
-
-				// Note:
-				// Q7 is inverted alpha now.
-				// Q0, Q1, Q2 is the original color.
-				// Q3 are free.
+				// Q7 is the alpha after the multiplier is applied.
+				// Q3 is free.
 
 				// Multiply the original RGB 565 color components with the inverted alpha then divided by 256.
+				// The SAR is already 8 (divided by 256) now, no need to set the SAR again, results of the multiplication
+				// will be automatically divided by 256.
 				asm volatile(
 					vector_multiply_u16(q0, q0, q7) // Multiply the red5 with the inverted alpha then divided by 256.
 					vector_multiply_u16(q1, q1, q7) // Multiply the green6 with the inverted alpha then divided by 256.
@@ -1203,12 +1356,18 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv_masked(
 			// Manually blending the remaining padding colors until the size is reached.
 			for (; x < clipped_size_x; x ++) {
 				// Get the bitmap color, the flipped original color, and the color bitmask of the pixel.
-				const	uint16_t color_dst_flipped			= dst_offset	[x];
-				const	uint16_t color_src_rgb565_pre_mul	= color_offset	[x];
-				const	uint16_t color_src_alpha_inv		= alpha_offset	[x];
-						uint16_t color_src_bitmask			= mask_offset	[x];
+				const	uint16_t color_dst_flipped			=							dst_offset	[x];
+				const	uint16_t color_src_alpha_inv		= alpha_offset != NULL ?	alpha_offset[x] : 0U;
+						uint16_t color_src_rgb565_pre_mul	=							color_offset[x];
+						uint16_t color_src_bitmask			=							mask_offset	[x];
 
-				// Flip the bitmask if the bitmap is not flipped.
+				// Flip the color back to get correct color order.
+				if (bitmap_flipped) {
+					color_src_rgb565_pre_mul = 	((color_src_rgb565_pre_mul >> 8U) & 0x00FFU)
+					|							((color_src_rgb565_pre_mul << 8U) & 0xFF00U);
+				}
+
+				// Flip the bitmask if the bitmap is not flipped if the bitmap is flipped.
 				if (flip_mask) {
 					color_src_bitmask =	((color_src_bitmask >> 8U) & 0x00FFU)
 					|					((color_src_bitmask << 8U) & 0xFF00U);
@@ -1220,6 +1379,7 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv_masked(
 
 				const uint16_t color_final_rgb565 = private_blend_color_fast_rgb565_pre_mul(
 					/* color_src_a8_inv			= */ (uint8_t) color_src_alpha_inv,
+					/* color_src_a8_multiplier	= */ bitmap_a8_multiplier,
 					/* color_src_rgb565_pre_mul	= */ color_src_rgb565_pre_mul,
 					/* color_dst_rgb565			= */ color_dst_rgb565
 				);
@@ -1242,21 +1402,22 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv_masked(
 }
 
 esp_err_t esp_fast_lcd_draw_native_bitmap_masked(
-	const	esp_fast_lcd_panel_device_t*	context,
-			int32_t							position_x,
-			int32_t							position_y,
-			uint32_t						size_x,
-			uint32_t						size_y,
-			uint32_t						bitmap_offset_x,
-			uint32_t						bitmap_offset_y,
-			uint32_t						bitmap_size_x,
-			uint32_t						bitmask_offset_x,
-			uint32_t						bitmask_offset_y,
-			uint32_t						bitmask_size_x,
-			uint8_t							bitmap_flipped,
-			uint8_t							bitmask_flipped,
-	const	uint16_t*						bitmap_rgb565,
-	const	uint16_t*						bitmask_rgb565
+	const esp_fast_lcd_panel_device_t*	context,
+	const int32_t						position_x,
+	const int32_t						position_y,
+	const uint32_t						size_x,
+	const uint32_t						size_y,
+	const uint32_t						bitmap_offset_x,
+	const uint32_t						bitmap_offset_y,
+	const uint32_t						bitmap_size_x,
+	const uint32_t						bitmask_offset_x,
+	const uint32_t						bitmask_offset_y,
+	const uint32_t						bitmask_size_x,
+	const uint8_t						bitmap_flipped,
+	const uint8_t						bitmask_flipped,
+	const uint8_t						bitmap_a8_multiplier,
+	const uint16_t*						bitmap_rgb565,
+	const uint16_t*						bitmask_rgb565
 ) {
 	// We cannot proceed without context.
 	ESP_RETURN_ON_FALSE(context != NULL, ESP_ERR_INVALID_ARG, ESP_FAST_LCD_TAG, "No esp_fast_lcd_panel_device_t handle provided when performing drawing an opaque native masked bitmap.");
@@ -1266,6 +1427,34 @@ esp_err_t esp_fast_lcd_draw_native_bitmap_masked(
 		||	size_y == 0
 	) {
 		return ESP_OK;
+	}
+
+	// Skip the draw if the bitmap is invisible.
+	if (bitmap_a8_multiplier == 0U) {
+		return ESP_OK;
+	}
+
+	// Route to translucent native bitmap variant if the multiplier is not opaque.
+	if (bitmap_a8_multiplier != 255U) {
+		return esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv_masked(
+			/* context					= */ context,
+			/* position_x				= */ position_x,
+			/* position_y				= */ position_y,
+			/* size_x					= */ size_x,
+			/* size_y					= */ size_y,
+			/* bitmap_offset_x			= */ bitmap_offset_x,
+			/* bitmap_offset_y			= */ bitmap_offset_y,
+			/* bitmap_size_x			= */ bitmap_size_x,
+			/* bitmask_offset_x			= */ bitmask_offset_x,
+			/* bitmask_offset_y			= */ bitmask_offset_y,
+			/* bitmask_size_x			= */ bitmask_size_x,
+			/* bitmap_flipped			= */ bitmap_flipped,
+			/* bitmask_flipped			= */ bitmask_flipped,
+			/* bitmap_a8_multiplier		= */ bitmap_a8_multiplier,
+			/* bitmap_rgb565_pre_mul	= */ bitmap_rgb565,
+			/* bitmap_a8_inv			= */ NULL,
+			/* bitmask_rgb565			= */ bitmask_rgb565
+		);
 	}
 
 	// Get the transfer queue and properties from the LCD panel device context.

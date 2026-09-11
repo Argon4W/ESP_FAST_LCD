@@ -12,15 +12,21 @@ extern "C" {
  * @brief							Private function of blending colors using fast floorDiv with either raw or pre-multiplied
  *									RGBA8888 colors.
  * @param color_src_rgba8888		The incoming 8-bit component color that can be either pre-multiplied or raw RGBA8888 color.
+ * @param color_src_a8_multiplier	The incoming 8-bit alpha multiplier to be applied to be incoming color.
  * @param color_src_pre_multiplied	True if the incoming color is pre-multiplied RGBA8888 color.
  * @param color_dst_rgb565			The framebuffer color to be blended with the incoming color.
  * @return							The blended color in RGB565 format (MSB first).
  */
 static inline uint16_t private_blend_color_fast_rgba8888(
 	const uint32_t	color_src_rgba8888,
+	const uint32_t	color_src_a8_multiplier,
 	const uint8_t	color_src_pre_multiplied,
 	const uint16_t	color_dst_rgb565
 ) {
+	if (color_src_a8_multiplier == 0U) {
+		return color_dst_rgb565;
+	}
+
 	// Reserve the all pre-multiplied color components of the RGBA8888 color.
 	uint8_t r8_src_pre_mul;
 	uint8_t g8_src_pre_mul;
@@ -37,36 +43,65 @@ static inline uint16_t private_blend_color_fast_rgba8888(
 			return color_dst_rgb565;
 		}
 
+		// Apply the multiplier to alpha first if it is not opaque.
+		if (color_src_a8_multiplier != 255U) {
+			// Invert the a8_src_inv back, apply the multiplier, then invert the alpha again.
+			a8_src_inv = 255U - (uint8_t) ((((uint16_t) color_src_a8_multiplier) * ((uint16_t) (255U - a8_src_inv))) / 256U);
+		}
+
+		// Skip if the pixel is transparent after the multiplier is applied (edge case).
+		if (a8_src_inv == 255U) {
+			return color_dst_rgb565;
+		}
+
 		// Get the pre-multiplied RGBA8888 color components.
 		r8_src_pre_mul = (uint8_t) ((color_src_rgba8888 >> 24U)	& 0xFFU);
 		g8_src_pre_mul = (uint8_t) ((color_src_rgba8888 >> 16U)	& 0xFFU);
 		b8_src_pre_mul = (uint8_t) ((color_src_rgba8888 >> 8U)	& 0xFFU);
+
+		// Apply the multiplier if it is not opaque.
+		if (color_src_a8_multiplier != 255U) {
+			// Apply the multiplier to R/G/B components.
+			r8_src_pre_mul = (uint8_t) ((((uint16_t) color_src_a8_multiplier) * ((uint16_t) r8_src_pre_mul)) / 256U);
+			g8_src_pre_mul = (uint8_t) ((((uint16_t) color_src_a8_multiplier) * ((uint16_t) g8_src_pre_mul)) / 256U);
+			b8_src_pre_mul = (uint8_t) ((((uint16_t) color_src_a8_multiplier) * ((uint16_t) b8_src_pre_mul)) / 256U);
+		}
 	} else {
 		// Get the alpha component of the rgba8888.
-		const uint8_t a8 = (uint8_t) ((color_src_rgba8888 >> 0U) & 0xFFU);
+		uint8_t a8_src = (uint8_t) ((color_src_rgba8888 >> 0U) & 0xFFU);
 
 		// Skip is the pixel is transparent.
-		if (a8 == 0U) {
+		if (a8_src == 0U) {
+			return color_dst_rgb565;
+		}
+
+		// Apply the multiplier if it is not opaque.
+		if (color_src_a8_multiplier != 255U) {
+			a8_src = (uint8_t) ((((uint16_t) color_src_a8_multiplier) * ((uint16_t) a8_src)) / 256U);
+		}
+
+		// Skip is the pixel is transparent after the multiplier is applied (edge case).
+		if (a8_src == 0U) {
 			return color_dst_rgb565;
 		}
 
 		// Get the R/G/B color components of the rgba8888.
-		const uint8_t r8 = (uint8_t) ((color_src_rgba8888 >> 24U)	& 0xFFU);
-		const uint8_t g8 = (uint8_t) ((color_src_rgba8888 >> 16U)	& 0xFFU);
-		const uint8_t b8 = (uint8_t) ((color_src_rgba8888 >> 8U)	& 0xFFU);
+		const uint8_t r8_src = (uint8_t) ((color_src_rgba8888 >> 24U)	& 0xFFU);
+		const uint8_t g8_src = (uint8_t) ((color_src_rgba8888 >> 16U)	& 0xFFU);
+		const uint8_t b8_src = (uint8_t) ((color_src_rgba8888 >> 8U)	& 0xFFU);
 
 		// Pre-multiply the color now.
-		if (a8 != 255U) {
+		if (a8_src != 255U) {
 			// Pre-multiply the color components the RGBA8888 color with the alpha if the alpha is not opaque.
-			r8_src_pre_mul	= (uint8_t) ((((uint16_t) a8) * ((uint16_t) r8)) / 256U);
-			g8_src_pre_mul	= (uint8_t) ((((uint16_t) a8) * ((uint16_t) g8)) / 256U);
-			b8_src_pre_mul	= (uint8_t) ((((uint16_t) a8) * ((uint16_t) b8)) / 256U);
-			a8_src_inv		= 255U - a8;
+			r8_src_pre_mul	= (uint8_t) ((((uint16_t) a8_src) * ((uint16_t) r8_src)) / 256U);
+			g8_src_pre_mul	= (uint8_t) ((((uint16_t) a8_src) * ((uint16_t) g8_src)) / 256U);
+			b8_src_pre_mul	= (uint8_t) ((((uint16_t) a8_src) * ((uint16_t) b8_src)) / 256U);
+			a8_src_inv		= 255U - a8_src;
 		} else {
 			// Set the color directly as the pre-multiplied color if the alpha is opaque.
-			r8_src_pre_mul	= r8;
-			g8_src_pre_mul	= g8;
-			b8_src_pre_mul	= b8;
+			r8_src_pre_mul	= r8_src;
+			g8_src_pre_mul	= g8_src;
+			b8_src_pre_mul	= b8_src;
 			a8_src_inv		= 0;
 		}
 	}
@@ -115,27 +150,52 @@ static inline uint16_t private_blend_color_fast_rgba8888(
  * @brief							Private function of blending colors using fast floorDiv with pre-multiplied RGB565 color
  *									and separate inverted 8-bit alpha component.
  * @param color_src_a8_inv			The separate 8-bit inverted alpha (255 - alpha) component of the incoming color.
+ * @param color_src_a8_multiplier	The incoming 8-bit alpha multiplier to be applied to be incoming color.
  * @param color_src_rgb565_pre_mul	The incoming pre-multiplied RGB565 color.
  * @param color_dst_rgb565			The framebuffer color to be blended with the incoming color.
  * @return							The blended color in RGB565 format (MSB first).
  */
 static inline uint16_t private_blend_color_fast_rgb565_pre_mul(
-	const uint8_t	color_src_a8_inv,
-	const uint16_t	color_src_rgb565_pre_mul,
-	const uint16_t	color_dst_rgb565
+			uint8_t		color_src_a8_inv,
+	const	uint8_t		color_src_a8_multiplier,
+	const	uint16_t	color_src_rgb565_pre_mul,
+	const	uint16_t	color_dst_rgb565
 ) {
+	if (color_src_a8_multiplier == 0U) {
+		return color_dst_rgb565;
+	}
+
 	if (color_src_a8_inv == 255U) {
 		return color_dst_rgb565;
 	}
 
-	if (color_src_a8_inv == 0U) {
+	if (color_src_a8_inv == 0U && color_src_a8_multiplier == 255U) {
 		return color_src_rgb565_pre_mul;
 	}
 
+	// Apply the multiplier to alpha first if it is not opaque.
+	if (color_src_a8_multiplier != 255U) {
+		// Invert the a8_src_inv back, apply the multiplier, then invert the alpha again.
+		color_src_a8_inv = 255U - (uint8_t) ((((uint16_t) color_src_a8_multiplier) * ((uint16_t) (255U - color_src_a8_inv))) / 256U);
+	}
+
+	// Skip is the pixel is transparent after the multiplier is applied (edge case).
+	if (color_src_a8_inv == 255U) {
+		return color_dst_rgb565;
+	}
+
 	// Get all color components of pre-multiplied RGB565 color components.
-	const uint8_t r5_src_pre_mul = (uint8_t) ((color_src_rgb565_pre_mul >> 11U)	& 0b011111U);
-	const uint8_t g6_src_pre_mul = (uint8_t) ((color_src_rgb565_pre_mul >> 5U)	& 0b111111U);
-	const uint8_t b5_src_pre_mul = (uint8_t) ((color_src_rgb565_pre_mul >> 0U)	& 0b011111U);
+	uint8_t r5_src_pre_mul = (uint8_t) ((color_src_rgb565_pre_mul >> 11U)	& 0b011111U);
+	uint8_t g6_src_pre_mul = (uint8_t) ((color_src_rgb565_pre_mul >> 5U)	& 0b111111U);
+	uint8_t b5_src_pre_mul = (uint8_t) ((color_src_rgb565_pre_mul >> 0U)	& 0b011111U);
+
+	// Apply the multiplier if it is not opaque.
+	if (color_src_a8_multiplier != 255U) {
+		// Apply the multiplier to R/G/B components.
+		r5_src_pre_mul = (uint8_t) ((((uint16_t) color_src_a8_multiplier) * ((uint16_t) r5_src_pre_mul)) / 256U);
+		g6_src_pre_mul = (uint8_t) ((((uint16_t) color_src_a8_multiplier) * ((uint16_t) g6_src_pre_mul)) / 256U);
+		b5_src_pre_mul = (uint8_t) ((((uint16_t) color_src_a8_multiplier) * ((uint16_t) b5_src_pre_mul)) / 256U);
+	}
 
 	// Get all color components of the framebuffer RGB565 color.
 	const uint8_t r5_dst = (uint8_t) ((color_dst_rgb565 >> 11U)	& 0b011111U);
