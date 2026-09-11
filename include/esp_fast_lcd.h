@@ -75,7 +75,6 @@ typedef struct {
 typedef struct {
 	esp_fast_lcd_panel_transfer_queue_t*	transfer_queue;	/*!< The asynchronous transfer queue of the LCD panel device. */
 	esp_fast_lcd_panel_properties_t*		properties;		/*!< The internal properties of the LCD panel device */
-	esp_lcd_panel_io_handle_t				io_handle;		/*!< The handle of the LCD panel IO. */
 	esp_lcd_panel_handle_t					handle;			/*!< The handle of the LCD panel device. */
 } esp_fast_lcd_panel_device_t;
 
