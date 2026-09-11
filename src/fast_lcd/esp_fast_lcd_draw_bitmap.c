@@ -947,10 +947,13 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv(
 				if (bitmap_a8_multiplier != 255U) {
 					// Apply the multiplier to the pre-multiplied R/G/B components.
 					asm volatile(
-						vector_broadcast_16	(q7, arg(0)) // Broadcast the multiplier to the SIMD vector register to apply the multiplier.
-						vector_multiply_u16	(q0, q0, q7) // Apply the multiplier to 8-bit red components.
-						vector_multiply_u16	(q1, q1, q7) // Apply the multiplier to 8-bit green components.
-						vector_multiply_u16	(q2, q2, q7) // Apply the multiplier to 8-bit blue components.
+						vector_broadcast_16		(q7, arg(0)) // Broadcast the multiplier to the SIMD vector register to apply the multiplier.
+						vector_multiply_u16		(q0, q0, q7) // Apply the multiplier to 5-bit red components.
+						vector_multiply_u16		(q1, q1, q7) // Apply the multiplier to 6-bit green components.
+						vector_multiply_u16		(q2, q2, q7) // Apply the multiplier to 5-bit blue components.
+						vector_bitwise_and_16	(q0, q0, q4) // Bitwise-AND the red component to make sure they only occupy [15:11].
+						vector_bitwise_and_16	(q1, q1, q5) // Bitwise-AND the green component to make sure they only occupy [10:5].
+						vector_bitwise_and_16	(q2, q2, q6) // Bitwise-AND the blue component to make sure they only occupy [4:0].
 						:
 						:	/* arg(0) = */ "a"(&bitmap_a8_multiplier_16) // The multiplier broadcasted to the SIMD vector register.
 					);
