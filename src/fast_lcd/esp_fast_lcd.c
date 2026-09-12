@@ -9,10 +9,10 @@
 #include "esp_fast_lcd_common_commit.h"
 
 esp_err_t esp_fast_lcd_new_lcd_panel_device(
-			esp_fast_lcd_panel_device_t**		panel_device_ret,
-			esp_fast_lcd_panel_configuration_t	panel_device_configuration,
-			esp_lcd_panel_handle_t				panel_handle,
-			esp_lcd_panel_io_handle_t			panel_io
+	esp_fast_lcd_panel_device_t**		panel_device_ret,
+	esp_fast_lcd_panel_configuration_t	panel_device_configuration,
+	esp_lcd_panel_handle_t				panel_handle,
+	esp_lcd_panel_io_handle_t			panel_io
 ) {
 	esp_err_t ret = ESP_OK;
 
