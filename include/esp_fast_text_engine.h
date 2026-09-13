@@ -384,6 +384,94 @@ esp_err_t esp_fast_text_engine_draw_native_outlined_string_fmt(
 );
 
 /**
+ * @brief						Draw a formatted string on a given LCD panel device.
+ * @param text_engine_context	The text engine to draw the glyph.
+ * @param panel_device_context	The LCD panel the glyph to be drawn to.
+ * @param position_x			The upper-left origin position X of the glyph to draw in pixels.
+ * @param position_y			The upper-left origin position Y of the glyph to draw in pixels.
+ * @param color_rgba8888		The color of the string to be drawn in RGBA 8888 format (MSB first).
+ * @param string				The string to be drawn
+ * @param args					Arguments to be formatted according to the format string in va_list.
+ * @return						The status of the draw.
+ */
+esp_err_t esp_fast_text_engine_draw_string_vfmt(
+	const	esp_fast_text_engine_instance_t*	text_engine_context,
+	const	esp_fast_lcd_panel_device_t*		panel_device_context,
+			int32_t								position_x,
+			int32_t								position_y,
+			uint32_t							color_rgba8888,
+			char*								string,
+			va_list								args
+);
+
+/**
+ * @brief						Draw a formatted string on a given LCD panel device.
+ * @param text_engine_context	The text engine to draw the glyph.
+ * @param panel_device_context	The LCD panel the glyph to be drawn to.
+ * @param position_x			The upper-left origin position X of the glyph to draw in pixels.
+ * @param position_y			The upper-left origin position Y of the glyph to draw in pixels.
+ * @param color_rgb565			The color of the string to be drawn in RGB 565 format (MSB first).
+ * @param string				The string to be drawn.
+ * @param args					Arguments to be formatted according to the format string in va_list.
+ * @return						The status of the draw.
+ */
+esp_err_t esp_fast_text_engine_draw_native_string_vfmt(
+	const	esp_fast_text_engine_instance_t*	text_engine_context,
+	const	esp_fast_lcd_panel_device_t*		panel_device_context,
+			int32_t								position_x,
+			int32_t								position_y,
+			uint16_t							color_rgb565,
+			char*								string,
+			va_list								args
+);
+
+/**
+ * @brief							Draw an outlined formatted string on a given LCD panel device.
+ * @param text_engine_context		The text engine to draw the glyph.
+ * @param panel_device_context		The LCD panel the glyph to be drawn to.
+ * @param position_x				The upper-left origin position X of the glyph to draw in pixels.
+ * @param position_y				The upper-left origin position Y of the glyph to draw in pixels.
+ * @param color_rgba8888			The color of the string to be drawn in RGBA 8888 format (MSB first).
+ * @param color_outline_rgba8888	The outline color of the glyph to be drawn in RGBA 8888 format (MSB first).
+ * @param string					The string to be drawn.
+ * @param args						Arguments to be formatted according to the format string in va_list.
+ * @return							The status of the draw.
+ */
+esp_err_t esp_fast_text_engine_draw_outlined_string_vfmt(
+	const	esp_fast_text_engine_instance_t*	text_engine_context,
+	const	esp_fast_lcd_panel_device_t*		panel_device_context,
+			int32_t								position_x,
+			int32_t								position_y,
+			uint32_t							color_rgba8888,
+			uint32_t							color_outline_rgba8888,
+			char*								string,
+			va_list								args
+);
+
+/**
+ * @brief						Draw an outlined formatted string on a given LCD panel device.
+ * @param text_engine_context	The text engine to draw the glyph.
+ * @param panel_device_context	The LCD panel the glyph to be drawn to.
+ * @param position_x			The upper-left origin position X of the glyph to draw in pixels.
+ * @param position_y			The upper-left origin position Y of the glyph to draw in pixels.
+ * @param color_rgb565			The color of the string to be drawn in RGB 565 format (MSB first).
+ * @param color_outline_rgb565	The outline color of the string to be drawn in RGB 565 format (MSB first).
+ * @param string				The string to be drawn.
+ * @param args					Arguments to be formatted according to the format string in va_list.
+ * @return						The status of the draw.
+ */
+esp_err_t esp_fast_text_engine_draw_native_outlined_string_vfmt(
+	const	esp_fast_text_engine_instance_t*	text_engine_context,
+	const	esp_fast_lcd_panel_device_t*		panel_device_context,
+			int32_t								position_x,
+			int32_t								position_y,
+			uint16_t							color_rgb565,
+			uint16_t							color_outline_rgb565,
+			char*								string,
+			va_list								args
+);
+
+/**
  * @brief								Create a text engine instance with given text engine configuration and font.
  * @param engine_instance_ret			The handle to receive the created text engine instance.
  * @param engine_instance_configuration	The configuration for initializing the text engine instance.
