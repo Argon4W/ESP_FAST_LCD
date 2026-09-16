@@ -127,8 +127,8 @@ esp_err_t esp_fast_lcd_draw_bitmap(
 		if (clipped_size_x < 16) {
 			for	(uint32_t x = 0U; x < clipped_size_x; x ++) {
 				// Get the bitmap color and the flipped original color of the pixel.
-				uint16_t color_dst_flipped	= dst_offset[x];
-				const	uint32_t color_src_rgba8888	= src_offset[x];
+				const uint16_t color_dst_flipped	= dst_offset[x];
+				const uint32_t color_src_rgba8888	= src_offset[x];
 
 				// Flip the LSB and MSB to get the correct RGB565 color.
 				const uint16_t color_dst_rgb565 =	((color_dst_flipped >> 8U) & 0x00FFU)
