@@ -12,22 +12,6 @@ extern "C" {
 static const char* ESP_FAST_LCD_TAG = "esp_fast_lcd";
 
 /**
- * @brief	Multiply two unsigned normalized 8-bit numbers.
- * @param a	The multiplier unsigned normalized 8-bit number in uint8_t.
- * @param b	The multiplicand unsigned normalized 8-bit number in uint8_t.
- * @return	The result of the multiplied normalized 8-bit number in uint8_t.
- */
-static inline uint8_t unorm8_mul_exact(
-	const uint8_t a,
-	const uint8_t b
-) {
-	// round div (+ 128U)
-	const uint16_t temp = ((uint16_t) a) * ((uint16_t) b) + 128U;
-	// Bitshift hack of divided by 255.
-	return (uint8_t) (((temp >> 8U) + temp) >> 8U);
-}
-
-/**
  * @brief					Check if a RGBA8888 color is opaque (R=255).
  * @param color_rgba8888	The RGBA8888 color to be checked.
  * @return					true if the color is opaque.

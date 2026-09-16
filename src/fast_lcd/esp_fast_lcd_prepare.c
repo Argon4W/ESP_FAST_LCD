@@ -37,9 +37,9 @@ esp_err_t esp_fast_lcd_prepare_rgba8888_bitmap_to_rgba8888_pre_mul(
 			const uint8_t a8_src = (uint8_t) ((color_src_rgba8888 >> 0U)	& 0xFFU);
 
 			// Pre-multiply the color components the RGBA8888 color with the alpha then invert the alpha.
-			const uint8_t r8_src_pre_mul	= unorm8_mul_exact(a8_src, r8_src);
-			const uint8_t g8_src_pre_mul	= unorm8_mul_exact(a8_src, g8_src);
-			const uint8_t b8_src_pre_mul	= unorm8_mul_exact(a8_src, b8_src);
+			const uint8_t r8_src_pre_mul	= (uint8_t) ((((uint16_t) a8_src) * ((uint16_t) (r8_src))) / 256U);
+			const uint8_t g8_src_pre_mul	= (uint8_t) ((((uint16_t) a8_src) * ((uint16_t) (g8_src))) / 256U);
+			const uint8_t b8_src_pre_mul	= (uint8_t) ((((uint16_t) a8_src) * ((uint16_t) (b8_src))) / 256U);
 			const uint8_t a8_src_inv		= 255U - a8_src;
 
 			// Pack them into pre-multiplied RGBA8888 format;
@@ -90,9 +90,9 @@ esp_err_t esp_fast_lcd_prepare_rgba8888_bitmap_to_rgb565_flipped(
 			const uint8_t a8_src = (uint8_t) ((color_src_rgba8888 >> 0U)	& 0xFFU);
 
 			// Blend the color with black.
-			const uint8_t r8_final = unorm8_mul_exact(a8_src, r8_src);
-			const uint8_t g8_final = unorm8_mul_exact(a8_src, g8_src);
-			const uint8_t b8_final = unorm8_mul_exact(a8_src, b8_src);
+			const uint8_t r8_final = (uint8_t) ((((uint16_t) a8_src) * ((uint16_t) (r8_src))) / 256U);
+			const uint8_t g8_final = (uint8_t) ((((uint16_t) a8_src) * ((uint16_t) (g8_src))) / 256U);
+			const uint8_t b8_final = (uint8_t) ((((uint16_t) a8_src) * ((uint16_t) (b8_src))) / 256U);
 
 			// Map the blended RGB888 color into RGB565.
 			const uint8_t r5_final = r8_final >> 3U;
@@ -218,9 +218,9 @@ esp_err_t esp_fast_lcd_prepare_rgba8888_bitmap_to_rgb565_pre_mul_a8_inv(
 			const uint8_t a8_src = (uint8_t) ((color_src_rgba8888 >> 0U)	& 0xFFU);
 
 			// Pre-multiply the color components the RGBA8888 color with the alpha then invert the alpha.
-			const uint8_t r8_src_pre_mul	= unorm8_mul_exact(a8_src, r8_src);
-			const uint8_t g8_src_pre_mul	= unorm8_mul_exact(a8_src, g8_src);
-			const uint8_t b8_src_pre_mul	= unorm8_mul_exact(a8_src, b8_src);
+			const uint8_t r8_src_pre_mul	= (uint8_t) ((((uint16_t) a8_src) * ((uint16_t) (r8_src))) / 256U);
+			const uint8_t g8_src_pre_mul	= (uint8_t) ((((uint16_t) a8_src) * ((uint16_t) (g8_src))) / 256U);
+			const uint8_t b8_src_pre_mul	= (uint8_t) ((((uint16_t) a8_src) * ((uint16_t) (b8_src))) / 256U);
 			const uint8_t a8_src_inv		= 255U - a8_src;
 
 			// Map the pre-multiplied RGB888 color into RGB565.

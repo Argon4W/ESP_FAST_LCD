@@ -119,165 +119,55 @@ esp_err_t esp_fast_lcd_draw_bitmap_masked(
 	uint8_t flip_mask = !bitmask_flipped;
 
 	for (uint32_t y = 0U; y < clipped_size_y; y ++) {
+		// Calculate the offset of the first pixel of the line at the framebuffer.
+		uint16_t* dst_offset = &framebuffer[
+			(clipped_start_position_y + y) * frame_size_x +
+			(clipped_start_position_x + 0)
+		];
+
+		// Calculate the offset of the first pixel of the line at bitmap.
+		const uint32_t* src_offset = &bitmap_rgba8888[
+			/* index_y = */ (clipped_start_offset_y + bitmap_offset_y + y) * bitmap_size_x +
+			/* index_x = */ (clipped_start_offset_x + bitmap_offset_x + 0)
+		];
+
+		// Calculate the offset of the first pixel of the line at bitmask.
+		const uint16_t* mask_offset = &bitmask_rgb565[
+			/* index_y = */ (clipped_start_offset_y + bitmask_offset_y + y) * bitmask_size_x +
+			/* index_x = */ (clipped_start_offset_x + bitmask_offset_x + 0)
+		];
+
 		// It's not worthwhile to use SIMD if the clipped_size_x is too short.
 		if (clipped_size_x < 16) {
 			for	(uint32_t x = 0U; x < clipped_size_x; x ++) {
-				// Get the index on the framebuffer at the given coordinate.
-				uint32_t pixel_index =	/* index_y = */ (clipped_start_position_y + y) * frame_size_x +
-										/* index_x = */ (clipped_start_position_x + x);
+				// Get the bitmap color, the flipped original color, and the color bitmask of the pixel.
+				const	uint16_t color_dst_flipped	= dst_offset	[x];
+				const	uint32_t color_src_rgba8888	= src_offset	[x];
+						uint16_t color_src_bitmask	= mask_offset	[x];
 
-				// Get the flipped original color of the pixel from the framebuffer.
-				const uint16_t color_dst_flipped = framebuffer[pixel_index];
-
-				// Get the color of the bitmap at given coordinate.
-				const uint32_t color_src_rgba8888 = bitmap_rgba8888[
-					/* index_y = */ (clipped_start_offset_y + bitmap_offset_y + y) * bitmap_size_x +
-					/* index_x = */ (clipped_start_offset_x + bitmap_offset_x + x)
-				];
-
-				// Reserve the all pre-multiplied color components of the RGBA8888 color.
-				uint8_t r8_src_pre_mul;
-				uint8_t g8_src_pre_mul;
-				uint8_t b8_src_pre_mul;
-				uint8_t a8_src_inv;
-
-				// Skip the pre-multiplication of the bitmap color if the bitmap is already pre-multiplied.
-				if (bitmap_pre_multiplied) {
-					// Get the inverted alpha component of the bitmap_pre_multiplied rgba8888.
-					a8_src_inv = (uint8_t) ((color_src_rgba8888 >> 0U) & 0xFFU);
-
-					// Skip if the pixel is transparent.
-					if (a8_src_inv == 255U) {
-						continue;
-					}
-
-					// Apply the multiplier to alpha first if it is not opaque.
-					if (bitmap_a8_multiplier != 255U) {
-						// Invert the a8_src_inv back, apply the multiplier, then invert the alpha again.
-						a8_src_inv = 255U - unorm8_mul_exact(bitmap_a8_multiplier, 255U - a8_src_inv);
-					}
-
-					// Skip if the pixel is transparent after the multiplier is applied (edge case).
-					if (a8_src_inv == 255U) {
-						continue;
-					}
-
-					// Get the pre-multiplied RGBA8888 color components.
-					r8_src_pre_mul = (uint8_t) ((color_src_rgba8888 >> 24U)	& 0xFFU);
-					g8_src_pre_mul = (uint8_t) ((color_src_rgba8888 >> 16U)	& 0xFFU);
-					b8_src_pre_mul = (uint8_t) ((color_src_rgba8888 >> 8U)	& 0xFFU);
-
-					// Apply the multiplier if it is not opaque.
-					if (bitmap_a8_multiplier != 255U) {
-						// Apply the multiplier to R/G/B components.
-						r8_src_pre_mul = unorm8_mul_exact(bitmap_a8_multiplier, r8_src_pre_mul);
-						g8_src_pre_mul = unorm8_mul_exact(bitmap_a8_multiplier, g8_src_pre_mul);
-						b8_src_pre_mul = unorm8_mul_exact(bitmap_a8_multiplier, b8_src_pre_mul);
-					}
-				} else {
-					// Get the alpha component of the rgba8888.
-					uint8_t a8_src = (uint8_t) ((color_src_rgba8888 >> 0U) & 0xFFU);
-
-					// Skip is the pixel is transparent.
-					if (a8_src == 0U) {
-						continue;
-					}
-
-					// Apply the multiplier if it is not opaque.
-					if (bitmap_a8_multiplier != 255U) {
-						a8_src = unorm8_mul_exact(bitmap_a8_multiplier, a8_src);
-					}
-
-					// Skip is the pixel is transparent after the multiplier is applied (edge case).
-					if (a8_src == 0U) {
-						continue;
-					}
-
-					// Get the R/G/B color components of the rgba8888.
-					const uint8_t r8_src = (uint8_t) ((color_src_rgba8888 >> 24U)	& 0xFFU);
-					const uint8_t g8_src = (uint8_t) ((color_src_rgba8888 >> 16U)	& 0xFFU);
-					const uint8_t b8_src = (uint8_t) ((color_src_rgba8888 >> 8U)	& 0xFFU);
-
-					// Pre-multiply the color now.
-					if (a8_src != 255U) {
-						// Pre-multiply the color components the RGBA8888 color with the alpha if the alpha is not opaque.
-						r8_src_pre_mul	= unorm8_mul_exact(a8_src, r8_src);
-						g8_src_pre_mul	= unorm8_mul_exact(a8_src, g8_src);
-						b8_src_pre_mul	= unorm8_mul_exact(a8_src, b8_src);
-						a8_src_inv		= 255U - a8_src;
-					} else {
-						// Set the color directly as the pre-multiplied color if the alpha is opaque.
-						r8_src_pre_mul	= r8_src;
-						g8_src_pre_mul	= g8_src;
-						b8_src_pre_mul	= b8_src;
-						a8_src_inv		= 0;
-					}
-				}
-
-				uint8_t r5_final;
-				uint8_t g6_final;
-				uint8_t b5_final;
-
-				// Write the color directly to the framebuffer if the bitmap is opaque.
-				if (a8_src_inv == 0U) {
-					// Map them into 5-6-5.
-					r5_final = r8_src_pre_mul >> 3U;
-					g6_final = g8_src_pre_mul >> 2U;
-					b5_final = b8_src_pre_mul >> 3U;
-				} else {
-					// Flip the LSB and MSB to get the correct RGB565 color order.
-					const uint16_t color_dst_rgb565 =	((color_dst_flipped >> 8U) & 0x00FFU)
-					|									((color_dst_flipped << 8U) & 0xFF00U);
-
-					// Get all color components of rgb565.
-					const uint8_t r5_dst = (uint8_t) ((color_dst_rgb565 >> 11U)	& 0b011111U);
-					const uint8_t g6_dst = (uint8_t) ((color_dst_rgb565 >> 5U)	& 0b111111U);
-					const uint8_t b5_dst = (uint8_t) ((color_dst_rgb565 >> 0U)	& 0b011111U);
-
-					// Map them to 0-255.
-					const uint8_t r8_dst = (uint8_t) ((r5_dst << 3U) | (r5_dst >> 2U));
-					const uint8_t g8_dst = (uint8_t) ((g6_dst << 2U) | (g6_dst >> 4U));
-					const uint8_t b8_dst = (uint8_t) ((b5_dst << 3U) | (b5_dst >> 2U));
-
-					// Mix the incoming color with the original color using painter's algorithm.
-					const uint16_t r16 = ((uint16_t) (r8_src_pre_mul)) + ((uint16_t) unorm8_mul_exact(a8_src_inv, r8_dst));
-					const uint16_t g16 = ((uint16_t) (g8_src_pre_mul)) + ((uint16_t) unorm8_mul_exact(a8_src_inv, g8_dst));
-					const uint16_t b16 = ((uint16_t) (b8_src_pre_mul)) + ((uint16_t) unorm8_mul_exact(a8_src_inv, b8_dst));
-
-					// Clamp the mixed possible 16-bit color back to 0-255.
-					const uint8_t r8_final = r16 > 255U ? 255U : ((uint8_t) r16);
-					const uint8_t g8_final = g16 > 255U ? 255U : ((uint8_t) g16);
-					const uint8_t b8_final = b16 > 255U ? 255U : ((uint8_t) b16);
-
-					// Map the RGB888 into RGB565.
-					r5_final = r8_final >> 3U;
-					g6_final = g8_final >> 2U;
-					b5_final = b8_final >> 3U;
-				}
-
-				// Get the bitmask of the bitmap at given coordinate.
-				uint16_t color_src_bitmask = bitmask_rgb565[
-					/* index_y = */ (clipped_start_offset_y + bitmask_offset_y + y) * bitmask_size_x +
-					/* index_x = */ (clipped_start_offset_x + bitmask_offset_x + x)
-				];
-
-				// Flip the bitmask if the bitmask is not flipped.
+				// Flip the bitmask if the bitmap is not flipped.
 				if (flip_mask) {
 					color_src_bitmask =	((color_src_bitmask >> 8U) & 0x00FFU)
 					|					((color_src_bitmask << 8U) & 0xFF00U);
 				}
 
-				// Pack them into RGB565 format;
-				const uint16_t color_final_rgb565 =	((((uint16_t) r5_final) & 0b011111U) << 11U)
-				|									((((uint16_t) g6_final) & 0b111111U) << 5U)
-				|									((((uint16_t) b5_final) & 0b011111U) << 0U);
+				// Flip the LSB and MSB to get the correct RGB565 color.
+				const uint16_t color_dst_rgb565 =	((color_dst_flipped >> 8U) & 0x00FFU)
+				|									((color_dst_flipped << 8U) & 0xFF00U);
 
-				// Flip the LSB and MSB back to get correct transmission byte order.
+				const uint16_t color_final_rgb565 = private_blend_color_fast_rgba8888(
+					/* color_src_rgba8888		= */ color_src_rgba8888,
+					/* color_src_a8_multiplier	= */ bitmap_a8_multiplier,
+					/* color_src_pre_multiplied	= */ bitmap_pre_multiplied,
+					/* color_dst_rgb565			= */ color_dst_rgb565
+				);
+
+				// Flip the LSB and MSB to get the correct transmission byte color.
 				const uint16_t color_final_flipped =	((color_final_rgb565 >> 8U) & 0x00FFU)
 				|										((color_final_rgb565 << 8U) & 0xFF00U);
 
 				// Mix and write the masked, blended, and flipped color to framebuffer.
-				framebuffer[pixel_index] = private_mix_mask_color(
+				dst_offset[x] = private_mix_mask_color(
 					/* color_dst		= */ color_dst_flipped,
 					/* color_src		= */ color_final_flipped,
 					/* color_bitmask	= */ color_src_bitmask
@@ -289,24 +179,6 @@ esp_err_t esp_fast_lcd_draw_bitmap_masked(
 
 			// Extract the X cursor out of the loop for SIMD blend optimization.
 			uint32_t x = 0;
-
-			// Calculate the offset of the first pixel of the line at the framebuffer.
-			uint16_t* dst_offset = &framebuffer[
-				(clipped_start_position_y + y) * frame_size_x +
-				(clipped_start_position_x + 0)
-			];
-
-			// Calculate the offset of the first pixel of the line at bitmap.
-			const uint32_t* src_offset = &bitmap_rgba8888[
-				/* index_y = */ (clipped_start_offset_y + bitmap_offset_y + y) * bitmap_size_x +
-				/* index_x = */ (clipped_start_offset_x + bitmap_offset_x + 0)
-			];
-
-			// Calculate the offset of the first pixel of the line at bitmask.
-			const uint16_t* mask_offset = &bitmask_rgb565[
-				/* index_y = */ (clipped_start_offset_y + bitmask_offset_y + y) * bitmask_size_x +
-				/* index_x = */ (clipped_start_offset_x + bitmask_offset_x + 0)
-			];
 
 			// Get the colors that we need to fill to reach the next 16-byte aligned address.
 			// ">> 1U" means "divided 2" because a color is 2 bytes long as RGB565.
@@ -865,21 +737,32 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv_masked(
 	uint8_t flip_mask = !bitmask_flipped;
 
 	for (uint32_t y = 0U; y < clipped_size_y; y ++) {
+		// Calculate the offset of the first pixel of the line at the framebuffer.
+		uint16_t* dst_offset = &framebuffer[
+			(clipped_start_position_y + y) * frame_size_x +
+			(clipped_start_position_x + 0)
+		];
+
+		const uint32_t bitmap_index =	/* index_y = */ (clipped_start_offset_y + bitmap_offset_y + y) * bitmap_size_x +
+										/* index_x = */ (clipped_start_offset_x + bitmap_offset_x + 0);
+
+		// Calculate the offset of the first pixel of the line at color and alpha bitmap.
+		const uint16_t* color_offset =							&bitmap_rgb565_pre_mul	[bitmap_index];
+		const uint16_t* alpha_offset = bitmap_a8_inv != NULL ?	&bitmap_a8_inv			[bitmap_index] : NULL;
+
+		const uint16_t* mask_offset = &bitmask_rgb565[
+			/* index_y = */ (clipped_start_offset_y + bitmask_offset_y + y) * bitmask_size_x +
+			/* index_x = */ (clipped_start_offset_x + bitmask_offset_x + 0)
+		];
+
 		// It's not worthwhile to use SIMD if the clipped_size_x is too short.
 		if (clipped_size_x < 16) {
 			for	(uint32_t x = 0U; x < clipped_size_x; x ++) {
-				const uint32_t pixel_index =	/* index_y = */ (clipped_start_position_y + y) * frame_size_x +
-												/* index_x = */ (clipped_start_position_x + x);
-
-				// Get the flipped original color of the pixel from the framebuffer.
-				const uint16_t color_dst_flipped = framebuffer[pixel_index];
-
-				// Get the index of the bitmap at given coordinate.
-				const uint32_t bitmap_index =	/* index_y = */ (clipped_start_offset_y + bitmap_offset_y + y) * bitmap_size_x +
-												/* index_x = */ (clipped_start_offset_x + bitmap_offset_x + x);
-
-				// Get the color of the bitmap at given coordinate.
-				uint16_t color_src_rgb565_pre_mul = bitmap_rgb565_pre_mul[bitmap_index];
+				// Get the bitmap color, the flipped original color, and the color bitmask of the pixel.
+				const	uint16_t color_dst_flipped			=							dst_offset	[x];
+				const	uint16_t color_src_alpha_inv		= alpha_offset != NULL ?	alpha_offset[x] : 0U;
+						uint16_t color_src_rgb565_pre_mul	=							color_offset[x];
+						uint16_t color_src_bitmask			=							mask_offset	[x];
 
 				// Flip the color back to get correct color order if the bitmap is flipped.
 				if (bitmap_flipped) {
@@ -887,52 +770,29 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv_masked(
 					|							((color_src_rgb565_pre_mul << 8U) & 0xFF00U);
 				}
 
-				// Get the inverted alpha of the bitmap at given coordinate or defaulted to 0.
-				const uint16_t color_src_a8_inv = bitmap_a8_inv != NULL ? bitmap_a8_inv[bitmap_index] : 0u;
-
-				// Skip if the pixel is transparent.
-				if (color_src_a8_inv == 255U) {
-					continue;
-				}
-
-				// Reserve the final blended RGB565 color.
-				uint16_t color_final_rgb565;
-
-				// Use the pre-multiplied color directly if the pixel is opaque.
-				if (color_src_a8_inv == 0U && bitmap_a8_multiplier == 255U) {
-					color_final_rgb565 = color_src_rgb565_pre_mul;
-				} else {
-					// Flip the LSB and MSB to get the correct RGB565 color order.
-					uint16_t color_dst_rgb565 =	((color_dst_flipped >> 8U) & 0x00FFU)
-					|							((color_dst_flipped << 8U) & 0xFF00U);
-
-					// Blend the framebuffer color with the pre-multiplied color and the inverted-alpha.
-					color_final_rgb565 = private_blend_color_fast_rgb565_pre_mul(
-						/* color_src_a8_inv			= */ color_src_a8_inv,
-						/* color_src_a8_multiplier	= */ bitmap_a8_multiplier,
-						/* color_src_rgb565_pre_mul	= */ color_src_rgb565_pre_mul,
-						/* color_dst_rgb565			= */ color_dst_rgb565
-					);
-				}
-
-				// Get the bitmask of the bitmap at given coordinate.
-				uint16_t color_src_bitmask = bitmask_rgb565[
-					/* index_y = */ (clipped_start_offset_y + bitmask_offset_y + y) * bitmask_size_x +
-					/* index_x = */ (clipped_start_offset_x + bitmask_offset_x + x)
-				];
-
 				// Flip the bitmask if the bitmap is not flipped.
 				if (flip_mask) {
 					color_src_bitmask =	((color_src_bitmask >> 8U) & 0x00FFU)
 					|					((color_src_bitmask << 8U) & 0xFF00U);
 				}
 
-				// Flip the LSB and MSB back to get correct transmission byte order.
+				// Flip the LSB and MSB to get the correct RGB565 color.
+				const uint16_t color_dst_rgb565 =	((color_dst_flipped >> 8U) & 0x00FFU)
+				|									((color_dst_flipped << 8U) & 0xFF00U);
+
+				const uint16_t color_final_rgb565 = private_blend_color_fast_rgb565_pre_mul(
+					/* color_src_a8_inv			= */ (uint8_t) color_src_alpha_inv,
+					/* color_src_a8_multiplier	= */ bitmap_a8_multiplier,
+					/* color_src_rgb565_pre_mul	= */ color_src_rgb565_pre_mul,
+					/* color_dst_rgb565			= */ color_dst_rgb565
+				);
+
+				// Flip the LSB and MSB to get the correct transmission byte color.
 				const uint16_t color_final_flipped =	((color_final_rgb565 >> 8U) & 0x00FFU)
 				|										((color_final_rgb565 << 8U) & 0xFF00U);
 
 				// Mix and write the masked, blended, and flipped color to framebuffer.
-				framebuffer[pixel_index] = private_mix_mask_color(
+				dst_offset[x] = private_mix_mask_color(
 					/* color_dst		= */ color_dst_flipped,
 					/* color_src		= */ color_final_flipped,
 					/* color_bitmask	= */ color_src_bitmask
@@ -944,24 +804,6 @@ esp_err_t esp_fast_lcd_draw_bitmap_rgb565_pre_mul_a8_inv_masked(
 
 			// Extract the X cursor out of the loop for SIMD blend optimization.
 			uint32_t x = 0;
-
-			// Calculate the offset of the first pixel of the line at the framebuffer.
-			uint16_t* dst_offset = &framebuffer[
-				(clipped_start_position_y + y) * frame_size_x +
-				(clipped_start_position_x + 0)
-			];
-
-			const uint32_t bitmap_index =	/* index_y = */ (clipped_start_offset_y + bitmap_offset_y + y) * bitmap_size_x +
-											/* index_x = */ (clipped_start_offset_x + bitmap_offset_x + 0);
-
-			// Calculate the offset of the first pixel of the line at color and alpha bitmap.
-			const uint16_t* color_offset =							&bitmap_rgb565_pre_mul	[bitmap_index];
-			const uint16_t* alpha_offset = bitmap_a8_inv != NULL ?	&bitmap_a8_inv			[bitmap_index] : NULL;
-
-			const uint16_t* mask_offset = &bitmask_rgb565[
-				/* index_y = */ (clipped_start_offset_y + bitmask_offset_y + y) * bitmask_size_x +
-				/* index_x = */ (clipped_start_offset_x + bitmask_offset_x + 0)
-			];
 
 			// Get the colors that we need to fill to reach the next 16-byte aligned address.
 			// ">> 1U" means "divided 2" because a color is 2 bytes long as RGB565.

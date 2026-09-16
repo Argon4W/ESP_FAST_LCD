@@ -454,9 +454,14 @@ esp_err_t esp_fast_lcd_draw_rectangle_masked(
 	const uint8_t a8_src_inv = 255U - a8_src;
 
 	// Pre-multiply the color with its alpha.
-	const uint8_t r8_src_pre_mul = unorm8_mul_exact(a8_src, r8_src);
-	const uint8_t g8_src_pre_mul = unorm8_mul_exact(a8_src, g8_src);
-	const uint8_t b8_src_pre_mul = unorm8_mul_exact(a8_src, b8_src);
+	const uint8_t r8_src_pre_mul = (uint8_t) ((((uint16_t) a8_src) * ((uint16_t) (r8_src))) / 256U);
+	const uint8_t g8_src_pre_mul = (uint8_t) ((((uint16_t) a8_src) * ((uint16_t) (g8_src))) / 256U);
+	const uint8_t b8_src_pre_mul = (uint8_t) ((((uint16_t) a8_src) * ((uint16_t) (b8_src))) / 256U);
+
+	// Prepare the RGB565 pre-multiplied color components of the incoming color.
+	const uint8_t r5_src_pre_mul = r8_src_pre_mul >> 3U;
+	const uint8_t g6_src_pre_mul = g8_src_pre_mul >> 2U;
+	const uint8_t b5_src_pre_mul = b8_src_pre_mul >> 3U;
 
 	// Log the operation if LCD panel debug logging is enabled.
 	#ifdef CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
@@ -505,35 +510,14 @@ esp_err_t esp_fast_lcd_draw_rectangle_masked(
 				const uint16_t color_dst_rgb565 =	((color_dst_flipped >> 8U) & 0x00FFU)
 				|									((color_dst_flipped << 8U) & 0xFF00U);
 
-				// Get all color components of rgb565.
-				const uint8_t r5_dst = (uint8_t) ((color_dst_rgb565 >> 11U)	& 0b011111U);
-				const uint8_t g6_dst = (uint8_t) ((color_dst_rgb565 >> 5U)	& 0b111111U);
-				const uint8_t b5_dst = (uint8_t) ((color_dst_rgb565 >> 0U)	& 0b011111U);
-
-				// Map the framebuffer RGB565 color to 0-255.
-				const uint8_t r8_dst = (uint8_t) ((r5_dst << 3U) | (r5_dst >> 2U));
-				const uint8_t g8_dst = (uint8_t) ((g6_dst << 2U) | (g6_dst >> 4U));
-				const uint8_t b8_dst = (uint8_t) ((b5_dst << 3U) | (b5_dst >> 2U));
-
-				// Mix the incoming color with the original color using painter's algorithm.
-				const uint16_t r16 = ((uint16_t) r8_src_pre_mul) + ((uint16_t) unorm8_mul_exact(a8_src_inv, r8_dst));
-				const uint16_t g16 = ((uint16_t) g8_src_pre_mul) + ((uint16_t) unorm8_mul_exact(a8_src_inv, g8_dst));
-				const uint16_t b16 = ((uint16_t) b8_src_pre_mul) + ((uint16_t) unorm8_mul_exact(a8_src_inv, b8_dst));
-
-				// Clamp the mixed possible 16-bit color back to 0-255.
-				const uint8_t r8_final = r16 > 255U ? 255U : ((uint8_t) r16);
-				const uint8_t g8_final = g16 > 255U ? 255U : ((uint8_t) g16);
-				const uint8_t b8_final = b16 > 255U ? 255U : ((uint8_t) b16);
-
-				// Map the RGB888 into RGB565.
-				const uint8_t r5_final = r8_final >> 3U;
-				const uint8_t g6_final = g8_final >> 2U;
-				const uint8_t b5_final = b8_final >> 3U;
-
-				// Pack them into RGB565 format;
-				const uint16_t color_final_rgb565 =	((((uint16_t) r5_final)	& 0b011111U) << 11U)
-				|									((((uint16_t) g6_final)	& 0b111111U) << 5U)
-				|									((((uint16_t) b5_final)	& 0b011111U) << 0U);
+				// Blend the framebuffer color with pre-multiplied incoming colors.
+				const uint16_t color_final_rgb565 =	private_blend_color_fast_rgb565_pre_mul_rect(
+					/* r5_src_pre_mul	= */ r5_src_pre_mul,
+					/* g6_src_pre_mul	= */ g6_src_pre_mul,
+					/* b5_src_pre_mul	= */ b5_src_pre_mul,
+					/* a8_src_inv		= */ a8_src_inv,
+					/* color_dst_rgb565	= */ color_dst_rgb565
+				);
 
 				// Flip the LSB and MSB back to get correct transmission byte order.
 				const uint16_t color_final_flipped =	((color_final_rgb565 >> 8U) & 0x00FFU)
@@ -548,11 +532,6 @@ esp_err_t esp_fast_lcd_draw_rectangle_masked(
 			}
 		}
 	} else {
-		// Prepare the RGB565 pre-multiplied color components of the incoming color.
-		const uint8_t r5_src_pre_mul = r8_src_pre_mul >> 3U;
-		const uint8_t g6_src_pre_mul = g8_src_pre_mul >> 2U;
-		const uint8_t b5_src_pre_mul = b8_src_pre_mul >> 3U;
-
 		// Shift the RGB565 pre-multiplied color components to the corresponding bit ranges.
 		const uint16_t r5_src_pre_mul_shift = ((uint16_t) r5_src_pre_mul) << 11U;
 		const uint16_t g6_src_pre_mul_shift = ((uint16_t) g6_src_pre_mul) << 5U;
@@ -603,7 +582,7 @@ esp_err_t esp_fast_lcd_draw_rectangle_masked(
 				|									((color_dst_flipped << 8U) & 0xFF00U);
 
 				// Blend the framebuffer color with pre-multiplied incoming colors.
-				const uint16_t color_final_rgb565 = private_blend_pre_mul_fast(
+				const uint16_t color_final_rgb565 = private_blend_color_fast_rgb565_pre_mul_rect(
 					/* r5_src_pre_mul	= */ r5_src_pre_mul,
 					/* g6_src_pre_mul	= */ g6_src_pre_mul,
 					/* b5_src_pre_mul	= */ b5_src_pre_mul,
@@ -842,7 +821,7 @@ esp_err_t esp_fast_lcd_draw_rectangle_masked(
 				|									((color_dst_flipped << 8U) & 0xFF00U);
 
 				// Blend the framebuffer color with pre-multiplied incoming colors.
-				const uint16_t color_final_rgb565 = private_blend_pre_mul_fast(
+				const uint16_t color_final_rgb565 = private_blend_color_fast_rgb565_pre_mul_rect(
 					/* r5_src_pre_mul	= */ r5_src_pre_mul,
 					/* g6_src_pre_mul	= */ g6_src_pre_mul,
 					/* b5_src_pre_mul	= */ b5_src_pre_mul,

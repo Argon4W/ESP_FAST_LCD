@@ -1,4 +1,3 @@
-#include "string.h"
 #include "esp_check.h"
 #include "esp_log.h"
 #include "utf8.h"

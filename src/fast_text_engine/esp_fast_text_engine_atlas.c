@@ -1,6 +1,7 @@
-#include "string.h"
+#include "stdlib.h"
 #include "esp_check.h"
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 #include "esp_fast_text_engine.h"
 #include "esp_fast_text_engine_common.h"
 #include "esp_fast_text_engine_common_atlas.h"

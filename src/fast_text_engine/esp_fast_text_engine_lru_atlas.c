@@ -1,4 +1,4 @@
-#include "string.h"
+#include "stdlib.h"
 #include "esp_check.h"
 #include "esp_log.h"
 #include "esp_fast_text_engine.h"

@@ -55,16 +55,21 @@ esp_err_t esp_fast_lcd_draw_pixel(
 	const uint8_t b8_src = (uint8_t) ((color_rgba8888 >> 8U)	& 0xFFU);
 	const uint8_t a8_src = (uint8_t) ((color_rgba8888 >> 0U)	& 0xFFU);
 
+	// Convert the RGBA8888 color components into RGB565 color components.
+	const uint8_t r5_src = r8_src >> 3U;
+	const uint8_t g6_src = g8_src >> 2U;
+	const uint8_t b5_src = b8_src >> 3U;
+
 	uint8_t r5_final;
 	uint8_t g6_final;
 	uint8_t b5_final;
 
 	// Get the index on the framebuffer at the given coordinate.
-	uint32_t pixel_index =	/* index_y = */ ((uint32_t) position_y) * frame_size_x +
-							/* index_x = */ ((uint32_t) position_x);
+	const uint32_t pixel_index =	/* index_y = */ ((uint32_t) position_y) * frame_size_x +
+									/* index_x = */ ((uint32_t) position_x);
 
-	// Convert and write the RGBA8888 color directly if the color is opaque.
-	if (color_rgba8888_is_opaque(color_rgba8888)) {
+	// Use the converted RGB565 color components if the color is opaque.
+	if (a8_src == 255U) {
 		// Log the operation if LCD panel debug logging is enabled.
 		#ifdef CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
 			ESP_LOGD(ESP_FAST_LCD_TAG, "LCD panel device \"%s\" is performing a opaque pixel draw at: positionX=%" PRId32 ", positionY=%" PRId32 ".",
@@ -79,13 +84,12 @@ esp_err_t esp_fast_lcd_draw_pixel(
 			);
 		#endif // CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
 
-		// Convert the RGBA8888 color components directly to RGB565.
-		r5_final = r8_src >> 3U;
-		g6_final = g8_src >> 2U;
-		b5_final = b8_src >> 3U;
+		r5_final = r5_src;
+		g6_final = g6_src;
+		b5_final = b5_src;
 	} else {
 		// get the inverted alpha component of the rgba8888.
-		const uint8_t a8_inv = 255U - a8_src;
+		const uint8_t a8_src_inv = 255U - a8_src;
 
 		// Get the flipped original color of the pixel from the framebuffer.
 		const uint16_t color_dst_flipped = framebuffer[pixel_index];
@@ -99,19 +103,15 @@ esp_err_t esp_fast_lcd_draw_pixel(
 		const uint8_t g6_dst = (uint8_t) ((color_dst_rgb565 >> 5U)	& 0b111111U);
 		const uint8_t b5_dst = (uint8_t) ((color_dst_rgb565 >> 0U)	& 0b011111U);
 
-		// Map them to 0-255.
-		const uint8_t r8_dst = (uint8_t) ((r5_dst << 3U) | (r5_dst >> 2U));
-		const uint8_t g8_dst = (uint8_t) ((g6_dst << 2U) | (g6_dst >> 4U));
-		const uint8_t b8_dst = (uint8_t) ((b5_dst << 3U) | (b5_dst >> 2U));
-
 		// Mix the incoming color with the original color using painter's algorithm.
-		const uint16_t r16 = ((uint16_t) unorm8_mul_exact(a8_src, r8_src)) + ((uint16_t) unorm8_mul_exact(a8_inv, r8_dst));
-		const uint16_t g16 = ((uint16_t) unorm8_mul_exact(a8_src, g8_src)) + ((uint16_t) unorm8_mul_exact(a8_inv, g8_dst));
-		const uint16_t b16 = ((uint16_t) unorm8_mul_exact(a8_src, b8_src)) + ((uint16_t) unorm8_mul_exact(a8_inv, b8_dst));
+		const uint16_t r16 = ((uint16_t) r5_src) + ((((uint16_t) a8_src_inv) * ((uint16_t) (r5_dst))) / 256U);
+		const uint16_t g16 = ((uint16_t) g6_src) + ((((uint16_t) a8_src_inv) * ((uint16_t) (g6_dst))) / 256U);
+		const uint16_t b16 = ((uint16_t) b5_src) + ((((uint16_t) a8_src_inv) * ((uint16_t) (b5_dst))) / 256U);
 
-		const uint8_t r8_final = r16 > 255U ? 255U : ((uint8_t) r16);
-		const uint8_t g8_final = g16 > 255U ? 255U : ((uint8_t) g16);
-		const uint8_t b8_final = b16 > 255U ? 255U : ((uint8_t) b16);
+		// Saturate the blended RGB565 color components.
+		r5_final = r16 > 0b011111U ? 0B011111U :((uint8_t) r16);
+		g6_final = g16 > 0b111111U ? 0B111111U :((uint8_t) g16);
+		b5_final = b16 > 0b011111U ? 0B011111U :((uint8_t) b16);
 
 		// Log the operation if LCD panel debug logging is enabled.
 		#ifdef CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
@@ -126,16 +126,12 @@ esp_err_t esp_fast_lcd_draw_pixel(
 				/* PRIX8 */ b8_src,
 				/* PRIX8 */ a8_src
 			);
-			ESP_LOGD(ESP_FAST_LCD_TAG, "Final blended pixel color: r=0x%02" PRIX8 ", g=0x%02" PRIX8 ", b=0x%02" PRIX8 ".",
-				/* PRIX8 */ r8_final,
-				/* PRIX8 */ g8_final,
-				/* PRIX8 */ b8_final
+			ESP_LOGD(ESP_FAST_LCD_TAG, "Final blended native pixel color: r=0x%02" PRIX8 ", g=0x%02" PRIX8 ", b=0x%02" PRIX8 ".",
+				/* PRIX8 */ r5_final,
+				/* PRIX8 */ g6_final,
+				/* PRIX8 */ b5_final
 			);
 		#endif // CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
-
-		r5_final = r8_final >> 3U;
-		g6_final = g8_final >> 2U;
-		b5_final = b8_final >> 3U;
 	}
 
 	// Pack them into RGB565 format;

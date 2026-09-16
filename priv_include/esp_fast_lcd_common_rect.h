@@ -19,7 +19,7 @@ extern "C" {
  * @param color_dst_rgb565		The framebuffer color to be blended with the incoming pre-multiplied color.
  * @return						The blended color in RGB565 format (MSB first).
  */
-static inline uint16_t private_blend_pre_mul_fast(
+static inline uint16_t private_blend_color_fast_rgb565_pre_mul_rect(
 	const uint8_t	r5_src_pre_mul,
 	const uint8_t	g6_src_pre_mul,
 	const uint8_t	b5_src_pre_mul,
