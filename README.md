@@ -106,23 +106,20 @@ void example() {
 
 // Asynchronous transmission task at a fixed-rate.
 void transmit_task(void* pvParameters) {
+    // Fill the placeholder with the framerate you want.
+    const TickType_t period = pdMS_TO_TICKS (1000U / ...);
+
+    // Reserve the last awake time in ticks.
+    TickType_t last_awake_time = xTaskGetTickCount();
+
+    // Transmit the data.
     while (true) {
-        // Get the start time in microseconds.
-        const int64_t start_time = esp_timer_get_time();
+        // Delay before transmitting next pending frames.
+        xTaskDelayUntil(&last_awake_time, period);
 
         // Transfer the pending transmissions in ring buffer slot to the LCD panel.
         esp_fast_lcd_transmit((esp_fast_lcd_panel_device_t*) pvParameters);
-
-        // Calculate the time to delay for next frame.
-        const int64_t end_time = esp_timer_get_time();
-        const int64_t interval = end_time - start_time;
-
-        // Fill the placeholder with the framerate you want.
-        const int64_t delay_time = (1000 * 1000 / ..) - interval;
-
-        // Delay.
-        vTaskDelay(pdMS_TO_TICKS(fmax(delay_time, 0) / 1000));
-	}
+    }
 }
 ```
 
