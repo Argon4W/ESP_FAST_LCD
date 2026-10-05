@@ -97,9 +97,9 @@ esp_err_t esp_fast_text_engine_new_text_engine_instance(
 	ESP_GOTO_ON_FALSE(engine_swap_buffer	!= NULL, ESP_ERR_NO_MEM, error, ESP_FAST_TEXT_ENGINE_TAG, "Failed to create formatting string buffer for text engine instance \"%s\".",	name);
 
 	// Allocate and initialize the resident and LRU atlases.
-	ESP_GOTO_ON_ERROR(private_new_lru_atlas	(&engine_l1_atlas,		"IRAM LRU",			iram_atlas_slot_count,	atlas_slot_size, L1_LRU_CAPS, L1_ATLAS_CAPS | atlas_flags), error, ESP_FAST_TEXT_ENGINE_TAG, "Failed to initialize IRAM LRU atlas for text engine instance \"%s\".",		name);
-	ESP_GOTO_ON_ERROR(private_new_lru_atlas	(&engine_l2_atlas,		"PSRAM LRU",		psram_atlas_slot_count,	atlas_slot_size, L2_LRU_CAPS, L2_ATLAS_CAPS | atlas_flags), error, ESP_FAST_TEXT_ENGINE_TAG, "Failed to initialize PSRAM LRU atlas for text engine instance \"%s\".",		name);
-	ESP_GOTO_ON_ERROR(private_new_atlas		(&engine_ascii_atlas,	"ASCII Resident",	128,					atlas_slot_size, L1_LRU_CAPS, L2_ATLAS_CAPS | atlas_flags), error, ESP_FAST_TEXT_ENGINE_TAG, "Failed to initialize ASCII Resident atlas for text engine instance \"%s\".",	name);
+	ESP_GOTO_ON_ERROR(private_new_lru_atlas	(&engine_l1_atlas,		"IRAM LRU",			iram_atlas_slot_count,	atlas_slot_size, L1_ATLAS_CAPS | atlas_flags, L1_LRU_CAPS), error, ESP_FAST_TEXT_ENGINE_TAG, "Failed to initialize IRAM LRU atlas for text engine instance \"%s\".",		name);
+	ESP_GOTO_ON_ERROR(private_new_lru_atlas	(&engine_l2_atlas,		"PSRAM LRU",		psram_atlas_slot_count,	atlas_slot_size, L2_ATLAS_CAPS | atlas_flags, L2_LRU_CAPS), error, ESP_FAST_TEXT_ENGINE_TAG, "Failed to initialize PSRAM LRU atlas for text engine instance \"%s\".",		name);
+	ESP_GOTO_ON_ERROR(private_new_atlas		(&engine_ascii_atlas,	"ASCII Resident",	128,					atlas_slot_size, L2_ATLAS_CAPS | atlas_flags, L1_LRU_CAPS), error, ESP_FAST_TEXT_ENGINE_TAG, "Failed to initialize ASCII Resident atlas for text engine instance \"%s\".",	name);
 
 	#ifdef CONFIG_ESP_FAST_LCD_DEBUG_LOGGING
 		ESP_LOGD(ESP_FAST_TEXT_ENGINE_TAG, "Filling properties for text engine instance \"%s\".", name);
